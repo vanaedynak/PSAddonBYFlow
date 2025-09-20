@@ -1,0 +1,7 @@
+name: PSAddonBYFlow
+main: dev.byflow.psaddon.PSAddonPlugin
+version: 0.1.0
+author: BYFlow
+api-version: '1.20'
+softdepend:
+  - ProtectionStones
