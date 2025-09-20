@@ -1,0 +1,49 @@
+plugins {
+    id 'java'
+}
+
+group = 'dev.byflow'
+version = '0.1.0'
+description = 'ProtectionStones addon that adds region durability mechanics.'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = uri('https://repo.papermc.io/repository/maven-public/')
+    }
+    maven {
+        name = 'sirblobman'
+        url = uri('https://nexus.sirblobman.xyz/public/')
+    }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'
+    compileOnly 'dev.espi:protectionstones:2.10.5'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.named('jar') {
+    archiveBaseName.set('PSAddonBYFlow')
+}
+
+processResources {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(
+            'name': 'PSAddonBYFlow',
+            'version': project.version
+        )
+    }
+}
