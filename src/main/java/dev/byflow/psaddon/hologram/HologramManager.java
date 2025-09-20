@@ -188,7 +188,18 @@ public final class HologramManager {
             if (id == null) {
                 return;
             }
-            Entity entity = region.getWorld().getEntity(id);
+            Entity entity = Bukkit.getEntity(id);
+            if (entity == null) {
+                entity = region.getWorld().getEntity(id);
+            }
+            if (entity == null) {
+                for (World world : plugin.getServer().getWorlds()) {
+                    entity = world.getEntity(id);
+                    if (entity != null) {
+                        break;
+                    }
+                }
+            }
             if (entity != null) {
                 entity.remove();
             }
@@ -274,10 +285,14 @@ public final class HologramManager {
                 return;
             }
             try {
-                Object hologram = getMethod.invoke(null, name);
-                if (hologram != null) {
-                    removeMethod.invoke(null, name);
+                if (getMethod != null) {
+                    try {
+                        getMethod.invoke(null, name);
+                    } catch (IllegalAccessException | InvocationTargetException ignored) {
+                        // ignore lookup failures and attempt removal anyway
+                    }
                 }
+                removeMethod.invoke(null, name);
             } catch (IllegalAccessException | InvocationTargetException ignored) {
                 // ignore, hologram will be re-created on next update
             }

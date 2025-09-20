@@ -6,6 +6,7 @@ import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.RegionHealthManager;
 import dev.byflow.psaddon.config.AddonSettings;
 import org.bukkit.block.Block;
+import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -30,11 +31,14 @@ public final class ProtectionStonesEventBridge implements Listener {
         @SuppressWarnings("unchecked")
         Class<? extends Event> removeClass = (Class<? extends Event>) hook.getPsRemoveEventClass();
 
-        manager.registerEvent(createClass, this, EventPriority.MONITOR, createExecutor, plugin, false);
+        manager.registerEvent(createClass, this, EventPriority.HIGHEST, createExecutor, plugin, false);
         manager.registerEvent(removeClass, this, EventPriority.MONITOR, removeExecutor, plugin, false);
     }
 
     private void handleCreate(Event event) {
+        if (event instanceof Cancellable cancellable && cancellable.isCancelled()) {
+            return;
+        }
         Object regionObject = hook.getCreateEventRegion(event);
         if (regionObject == null) {
             return;
