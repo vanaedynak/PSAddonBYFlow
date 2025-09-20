@@ -5,6 +5,7 @@ import dev.byflow.psaddon.ProtectionStonesHook;
 import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.RegionHealthManager;
 import dev.byflow.psaddon.config.AddonSettings;
+import org.bukkit.block.Block;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -39,11 +40,12 @@ public final class ProtectionStonesEventBridge implements Listener {
             return;
         }
         RegionHandle region = hook.wrap(regionObject);
-        AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
+        Block protectBlock = region.getProtectBlock();
+        AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(protectBlock);
         RegionHealthManager.RegistrationResult result = plugin.getRegionHealthManager().registerRegion(
                 region,
                 settings.lives(),
-                region.getProtectBlock(),
+                protectBlock,
                 plugin.getAddonSettings().isPreventStacking()
         );
         if (!result.accepted()) {
@@ -53,6 +55,9 @@ public final class ProtectionStonesEventBridge implements Listener {
             if (message != null && !message.isEmpty()) {
                 hook.sendCreateEventMessage(event, message);
             }
+            String blockKey = protectBlock != null
+                    ? RegionHealthManager.toBlockKey(protectBlock.getLocation())
+                    : region.getStorageKey();
             plugin.getLogger().info("Prevented overlapping ProtectionStones region at " + blockKey +
                     ", existing region key " + result.conflictingRegionKey());
             return;
