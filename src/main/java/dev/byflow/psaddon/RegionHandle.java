@@ -50,6 +50,10 @@ public final class RegionHandle {
         return base;
     }
 
+    public Optional<ProtectionStonesHook.RegionBounds> getBounds() {
+        return hook.getRegionBounds(handle);
+    }
+
     public Optional<ProtectionStonesHook.OwnerInfo> getOwnerInfo() {
         return hook.getOwnerInfo(handle);
     }

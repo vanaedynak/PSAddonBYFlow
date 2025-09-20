@@ -10,8 +10,10 @@ import org.bukkit.entity.Player;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ProtectionStonesHook {
     private final Class<?> psRegionClass;
@@ -28,6 +30,10 @@ public final class ProtectionStonesHook {
     private final Method getRegionsByIdMethod;
     private final Method getOwnerUuidMethod;
     private final Method getOwnerNameMethod;
+    private final Method getWorldGuardRegionMethod;
+    private final Map<Class<?>, Method> minimumPointCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Method> maximumPointCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, VectorAccessors> vectorAccessorCache = new ConcurrentHashMap<>();
 
     public ProtectionStonesHook() throws ReflectiveOperationException {
         this.psRegionClass = Class.forName("dev.espi.protectionstones.PSRegion");
@@ -60,6 +66,7 @@ public final class ProtectionStonesHook {
 
         Class<?> psMainClass = Class.forName("dev.espi.protectionstones.ProtectionStones");
         this.getRegionsByIdMethod = psMainClass.getMethod("getPSRegions", World.class, String.class);
+        this.getWorldGuardRegionMethod = resolveRegionMethod();
     }
 
     public Optional<RegionHandle> findRegion(Location location) {
@@ -173,6 +180,34 @@ public final class ProtectionStonesHook {
         return Optional.of(new OwnerInfo(uuid, rawName, displayName));
     }
 
+    public Optional<RegionBounds> getRegionBounds(Object region) {
+        if (getWorldGuardRegionMethod == null || region == null) {
+            return Optional.empty();
+        }
+        try {
+            Object wgRegion = getWorldGuardRegionMethod.invoke(region);
+            if (wgRegion == null) {
+                return Optional.empty();
+            }
+            Object minimum = invokeCachedNoArg(wgRegion, minimumPointCache,
+                    "getMinimumPoint", "getMinimum", "getMinPoint");
+            Object maximum = invokeCachedNoArg(wgRegion, maximumPointCache,
+                    "getMaximumPoint", "getMaximum", "getMaxPoint");
+            if (minimum == null || maximum == null) {
+                return Optional.empty();
+            }
+            Coordinates min = extractCoordinates(minimum);
+            Coordinates max = extractCoordinates(maximum);
+            if (min == null || max == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new RegionBounds(min.x(), min.y(), min.z(), max.x(), max.y(), max.z()));
+        } catch (IllegalAccessException | InvocationTargetException ex) {
+            Bukkit.getLogger().warning("Failed to read ProtectionStones region bounds: " + ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Object getCreateEventRegion(Object event) {
         return extractRegionFromEvent(event, psCreateEventClass);
     }
@@ -199,6 +234,90 @@ public final class ProtectionStonesHook {
             }
         } catch (IllegalAccessException | InvocationTargetException ex) {
             Bukkit.getLogger().warning("Failed to message PSCreateEvent player: " + ex.getMessage());
+        }
+    }
+
+    private Method resolveRegionMethod() {
+        Method method = findMethod(psRegionClass, "getWGRegion", "getRegion", "getProtectedRegion");
+        if (method == null) {
+            Bukkit.getLogger().warning("Unable to locate WorldGuard region accessor on PSRegion; stacking checks will be limited.");
+        }
+        return method;
+    }
+
+    private Method findMethod(Class<?> type, String... candidates) {
+        for (String name : candidates) {
+            try {
+                return type.getMethod(name);
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Object invokeCachedNoArg(Object target, Map<Class<?>, Method> cache, String... candidates)
+            throws InvocationTargetException, IllegalAccessException {
+        Method method = cache.computeIfAbsent(target.getClass(), clazz -> findMethod(clazz, candidates));
+        if (method == null) {
+            return null;
+        }
+        return method.invoke(target);
+    }
+
+    private Coordinates extractCoordinates(Object vector) throws InvocationTargetException, IllegalAccessException {
+        if (vector == null) {
+            return null;
+        }
+        VectorAccessors accessors = vectorAccessorCache.computeIfAbsent(vector.getClass(), this::resolveVectorAccessors);
+        if (accessors == null) {
+            return null;
+        }
+        Number x = (Number) accessors.xMethod().invoke(vector);
+        Number y = (Number) accessors.yMethod().invoke(vector);
+        Number z = (Number) accessors.zMethod().invoke(vector);
+        return new Coordinates(x.intValue(), y.intValue(), z.intValue());
+    }
+
+    private VectorAccessors resolveVectorAccessors(Class<?> type) {
+        Method x = findMethod(type, "getBlockX", "getX", "getMinX");
+        Method y = findMethod(type, "getBlockY", "getY", "getMinY");
+        Method z = findMethod(type, "getBlockZ", "getZ", "getMinZ");
+        if (x == null || y == null || z == null) {
+            Bukkit.getLogger().warning("Unable to resolve coordinate accessors for vector type " + type.getName());
+            return null;
+        }
+        return new VectorAccessors(x, y, z);
+    }
+
+    private record Coordinates(int x, int y, int z) {
+    }
+
+    private record VectorAccessors(Method xMethod, Method yMethod, Method zMethod) {
+    }
+
+    public record RegionBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        public RegionBounds {
+            if (minX > maxX) {
+                int tmp = minX;
+                minX = maxX;
+                maxX = tmp;
+            }
+            if (minY > maxY) {
+                int tmp = minY;
+                minY = maxY;
+                maxY = tmp;
+            }
+            if (minZ > maxZ) {
+                int tmp = minZ;
+                minZ = maxZ;
+                maxZ = tmp;
+            }
+        }
+
+        public boolean intersects(RegionBounds other) {
+            return this.maxX >= other.minX && this.minX <= other.maxX
+                    && this.maxY >= other.minY && this.minY <= other.maxY
+                    && this.maxZ >= other.minZ && this.minZ <= other.maxZ;
         }
     }
 

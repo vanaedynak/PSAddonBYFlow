@@ -36,7 +36,7 @@ public final class PSAddonPlugin extends JavaPlugin {
             return;
         }
 
-        this.regionHealthManager = new RegionHealthManager(this);
+        this.regionHealthManager = new RegionHealthManager(this, protectionStonesHook);
         this.regionHealthManager.load();
 
         this.hologramManager = new HologramManager(this);

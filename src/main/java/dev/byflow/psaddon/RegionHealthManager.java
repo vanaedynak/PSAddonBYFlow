@@ -19,13 +19,15 @@ public final class RegionHealthManager {
     private static final String REGIONS_ROOT = "regions";
 
     private final JavaPlugin plugin;
+    private final ProtectionStonesHook hook;
     private final Map<String, RegionRecord> regionRecords = new HashMap<>();
     private final Map<String, String> blockIndex = new HashMap<>();
     private final File storageFile;
     private final YamlConfiguration storageConfig = new YamlConfiguration();
 
-    public RegionHealthManager(JavaPlugin plugin) {
+    public RegionHealthManager(JavaPlugin plugin, ProtectionStonesHook hook) {
         this.plugin = plugin;
+        this.hook = hook;
         if (!plugin.getDataFolder().exists()) {
             //noinspection ResultOfMethodCallIgnored
             plugin.getDataFolder().mkdirs();
@@ -98,6 +100,9 @@ public final class RegionHealthManager {
     public RegistrationResult registerRegion(RegionHandle region, int defaultLives, Block block, boolean preventStacking) {
         String blockKey = block != null ? toBlockKey(block.getLocation()) : null;
         String storageKey = region.getStorageKey();
+        ProtectionStonesHook.RegionBounds bounds = preventStacking
+                ? region.getBounds().orElse(null)
+                : null;
         if (preventStacking && blockKey != null) {
             String existingRegion = blockIndex.get(blockKey);
             if (existingRegion != null && !Objects.equals(existingRegion, storageKey)) {
@@ -108,6 +113,12 @@ public final class RegionHealthManager {
                 if (conflict != null) {
                     return RegistrationResult.conflict(conflict);
                 }
+            }
+        }
+        if (preventStacking && bounds != null) {
+            String overlapping = findBoundsConflict(storageKey, bounds);
+            if (overlapping != null) {
+                return RegistrationResult.conflict(overlapping);
             }
         }
 
@@ -205,6 +216,26 @@ public final class RegionHealthManager {
             String regionKey = blockIndex.get(key);
             if (regionKey != null && !Objects.equals(regionKey, storageKey)) {
                 return regionKey;
+            }
+        }
+        return null;
+    }
+
+    private String findBoundsConflict(String storageKey, ProtectionStonesHook.RegionBounds bounds) {
+        for (String existingKey : regionRecords.keySet()) {
+            if (Objects.equals(existingKey, storageKey)) {
+                continue;
+            }
+            Optional<RegionHandle> handle = hook.findRegionByKey(existingKey);
+            if (handle.isEmpty()) {
+                continue;
+            }
+            Optional<ProtectionStonesHook.RegionBounds> otherBounds = handle.get().getBounds();
+            if (otherBounds.isEmpty()) {
+                continue;
+            }
+            if (bounds.intersects(otherBounds.get())) {
+                return existingKey;
             }
         }
         return null;
