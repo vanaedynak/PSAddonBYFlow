@@ -12,16 +12,20 @@ default:
     enabled: true
     # Смещение голограммы по вертикали от центра блока.
     offset-y: 1.8
-    # Текст голограммы. Поддерживаются плейсхолдеры {lives} и {max}.
-    text: "&cЖизни привата: &f{lives}&7/&f{max}"
+    # Можно указать строку или список. Доступные плейсхолдеры:
+    # {lives}, {max}, {owner}, {owner_uuid}, {region}, {world}, {x}, {y}, {z}, {material}
+    lines:
+      - "&cЖизни привата: &#ff5555{lives}&7/&f{max}"
+      - "&7Владелец: &f{owner}"
 
 # Раздел blocks позволяет переопределять значения для конкретных блоков (материал указывается как в Bukkit API).
 blocks:
   DIAMOND_BLOCK:
     lives: 5
-    damage-per-explosion: 2
     hologram:
-      text: "&bАлмазный приват: &f{lives}&7/&f{max}"
+      lines:
+        - "&bАлмазный приват"
+        - "&f{lives}&7/&f{max} &8жизней"
 
 # Защита от бага со stack'ом приватных блоков.
 prevent-stacking: true

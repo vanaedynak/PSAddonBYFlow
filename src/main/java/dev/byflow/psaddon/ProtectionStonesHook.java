@@ -26,6 +26,8 @@ public final class ProtectionStonesHook {
     private final Method eventGetPlayerMethod;
     private final Method eventSetCancelledMethod;
     private final Method getRegionsByIdMethod;
+    private final Method getOwnerUuidMethod;
+    private final Method getOwnerNameMethod;
 
     public ProtectionStonesHook() throws ReflectiveOperationException {
         this.psRegionClass = Class.forName("dev.espi.protectionstones.PSRegion");
@@ -34,6 +36,9 @@ public final class ProtectionStonesHook {
         this.getWorldMethod = psRegionClass.getMethod("getWorld");
         this.getProtectBlockMethod = psRegionClass.getMethod("getProtectBlock");
         this.deleteRegionMethod = psRegionClass.getMethod("deleteRegion", boolean.class);
+
+        this.getOwnerUuidMethod = resolveOwnerUuidMethod(psRegionClass);
+        this.getOwnerNameMethod = resolveOwnerNameMethod(psRegionClass);
 
         this.psCreateEventClass = Class.forName("dev.espi.protectionstones.event.PSCreateEvent");
         this.psRemoveEventClass = Class.forName("dev.espi.protectionstones.event.PSRemoveEvent");
@@ -130,6 +135,44 @@ public final class ProtectionStonesHook {
         return (Block) getProtectBlockMethod.invoke(region);
     }
 
+    public Optional<OwnerInfo> getOwnerInfo(Object region) {
+        UUID uuid = null;
+        String rawName = null;
+        if (getOwnerUuidMethod != null) {
+            try {
+                Object value = getOwnerUuidMethod.invoke(region);
+                if (value instanceof UUID u) {
+                    uuid = u;
+                } else if (value instanceof String text && !text.isEmpty()) {
+                    try {
+                        uuid = UUID.fromString(text);
+                    } catch (IllegalArgumentException ignored) {
+                        rawName = text;
+                    }
+                }
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+            }
+        }
+        if (getOwnerNameMethod != null) {
+            try {
+                Object value = getOwnerNameMethod.invoke(region);
+                if (value != null) {
+                    rawName = value.toString();
+                }
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+            }
+        }
+        if (uuid == null && rawName == null) {
+            return Optional.empty();
+        }
+        String displayName = rawName;
+        if ((displayName == null || displayName.isBlank()) && uuid != null) {
+            displayName = Optional.ofNullable(Bukkit.getOfflinePlayer(uuid).getName())
+                    .orElse(uuid.toString());
+        }
+        return Optional.of(new OwnerInfo(uuid, rawName, displayName));
+    }
+
     public Object getCreateEventRegion(Object event) {
         return extractRegionFromEvent(event, psCreateEventClass);
     }
@@ -181,5 +224,35 @@ public final class ProtectionStonesHook {
 
     public Class<?> getPsRemoveEventClass() {
         return psRemoveEventClass;
+    }
+
+    private Method resolveOwnerUuidMethod(Class<?> regionClass) {
+        for (String methodName : new String[]{"getOwnerUUID", "getOwner", "getOwnerId"}) {
+            try {
+                Method method = regionClass.getMethod(methodName);
+                if (UUID.class.isAssignableFrom(method.getReturnType())
+                        || String.class.isAssignableFrom(method.getReturnType())) {
+                    return method;
+                }
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Method resolveOwnerNameMethod(Class<?> regionClass) {
+        for (String methodName : new String[]{"getOwnerName", "getOwnerDisplayName"}) {
+            try {
+                Method method = regionClass.getMethod(methodName);
+                if (String.class.isAssignableFrom(method.getReturnType())) {
+                    return method;
+                }
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        return null;
+    }
+
+    public record OwnerInfo(UUID uuid, String rawName, String displayName) {
     }
 }

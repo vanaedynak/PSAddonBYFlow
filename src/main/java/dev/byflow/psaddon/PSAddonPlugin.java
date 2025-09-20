@@ -4,9 +4,12 @@ import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
+import dev.byflow.psaddon.listener.WitherProtectionListener;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.List;
 
 public final class PSAddonPlugin extends JavaPlugin {
     private ProtectionStonesHook protectionStonesHook;
@@ -68,9 +71,27 @@ public final class PSAddonPlugin extends JavaPlugin {
         return addonSettings;
     }
 
+    public int damageRegion(RegionHandle region, AddonSettings.BlockSettings settings, int amount) {
+        int maxLives = settings.lives();
+        int remaining = regionHealthManager.damageRegion(region, amount, maxLives);
+        if (remaining > 0) {
+            hologramManager.update(region, settings, remaining, maxLives);
+            return remaining;
+        }
+
+        boolean deleted = protectionStonesHook.deleteRegion(region);
+        regionHealthManager.removeRegion(region);
+        hologramManager.remove(region);
+        if (!deleted) {
+            getLogger().warning("Failed to remove region " + region.getStorageKey() + " after durability reached zero.");
+        }
+        return 0;
+    }
+
     private void registerListeners() {
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new ExplosionListener(this), this);
+        pluginManager.registerEvents(new WitherProtectionListener(this), this);
 
         ProtectionStonesEventBridge bridge = new ProtectionStonesEventBridge(this, protectionStonesHook);
         bridge.register(pluginManager);
@@ -83,7 +104,10 @@ public final class PSAddonPlugin extends JavaPlugin {
         cfg.addDefault("default.tnt-only", true);
         cfg.addDefault("default.hologram.enabled", true);
         cfg.addDefault("default.hologram.offset-y", 1.8);
-        cfg.addDefault("default.hologram.text", "&cЖизни привата: &f{lives}&7/&f{max}");
+        cfg.addDefault("default.hologram.lines", List.of(
+                "&cЖизни привата: &f{lives}&7/&f{max}",
+                "&7Владелец: &f{owner}"
+        ));
         cfg.addDefault("prevent-stacking", true);
         cfg.addDefault("messages.stack-block-denied", "&cНельзя ставить приват вплотную к другому приватному блоку!");
         cfg.options().copyDefaults(true);

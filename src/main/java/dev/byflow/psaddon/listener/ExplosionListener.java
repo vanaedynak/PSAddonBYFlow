@@ -2,7 +2,7 @@ package dev.byflow.psaddon.listener;
 
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.config.AddonSettings;
-import dev.byflow.psaddon.hologram.HologramManager;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.EventHandler;
@@ -27,25 +27,26 @@ public final class ExplosionListener implements Listener {
 
         plugin.getProtectionStonesHook().findRegion(event.getLocation()).ifPresent(region -> {
             AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
-            if (settings.tntOnly() && !(source instanceof TNTPrimed)) {
+            if (!isSourceAllowed(settings, source)) {
+                protectBlock(event, region.getProtectBlock());
                 return;
             }
 
-            int maxLives = settings.lives();
-            int remaining = plugin.getRegionHealthManager().damageRegion(region, settings.damagePerExplosion(), maxLives);
+            int remaining = plugin.damageRegion(region, settings, settings.damagePerExplosion());
             if (remaining > 0) {
-                HologramManager hologramManager = plugin.getHologramManager();
-                hologramManager.update(region, settings, remaining, maxLives);
-                event.blockList().clear();
-                event.setCancelled(true);
-            } else {
-                boolean deleted = plugin.getProtectionStonesHook().deleteRegion(region);
-                plugin.getRegionHealthManager().removeRegion(region);
-                plugin.getHologramManager().remove(region);
-                if (!deleted) {
-                    plugin.getLogger().warning("Failed to remove region " + region.getStorageKey() + " after durability reached zero.");
-                }
+                protectBlock(event, region.getProtectBlock());
             }
         });
+    }
+
+    private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source) {
+        if (!settings.tntOnly()) {
+            return true;
+        }
+        return source instanceof TNTPrimed;
+    }
+
+    private void protectBlock(EntityExplodeEvent event, Block block) {
+        event.blockList().removeIf(candidate -> candidate.getLocation().equals(block.getLocation()));
     }
 }

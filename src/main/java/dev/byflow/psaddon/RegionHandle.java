@@ -6,6 +6,7 @@ import org.bukkit.block.Block;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class RegionHandle {
     private final ProtectionStonesHook hook;
@@ -47,6 +48,10 @@ public final class RegionHandle {
     public Location getHologramLocation(double offsetY) {
         Location base = getProtectBlock().getLocation().add(0.5, offsetY, 0.5);
         return base;
+    }
+
+    public Optional<ProtectionStonesHook.OwnerInfo> getOwnerInfo() {
+        return hook.getOwnerInfo(handle);
     }
 
     public String getStorageKey() {

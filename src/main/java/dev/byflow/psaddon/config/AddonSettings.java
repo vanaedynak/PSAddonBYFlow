@@ -5,7 +5,10 @@ import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -66,14 +69,17 @@ public final class AddonSettings {
             boolean tntOnly,
             boolean hologramEnabled,
             double hologramOffset,
-            String hologramText
+            List<String> hologramLines
     ) {
-        private static final String DEFAULT_HOLOGRAM_TEXT = "&cЖизни привата: &f{lives}&7/&f{max}";
+        private static final List<String> DEFAULT_HOLOGRAM_LINES =
+                List.of("&cЖизни привата: &f{lives}&7/&f{max}");
 
         public BlockSettings {
             lives = Math.max(1, lives);
             damagePerExplosion = Math.max(1, damagePerExplosion);
-            hologramText = hologramText == null ? DEFAULT_HOLOGRAM_TEXT : hologramText;
+            hologramLines = hologramLines == null || hologramLines.isEmpty()
+                    ? DEFAULT_HOLOGRAM_LINES
+                    : List.copyOf(hologramLines);
         }
 
         static BlockSettings from(ConfigurationSection section, BlockSettings fallback) {
@@ -83,22 +89,75 @@ public final class AddonSettings {
 
             boolean hologramEnabled = fallback != null ? fallback.hologramEnabled : true;
             double hologramOffset = fallback != null ? fallback.hologramOffset : 1.8;
-            String hologramText = fallback != null ? fallback.hologramText : DEFAULT_HOLOGRAM_TEXT;
+            List<String> hologramLines = fallback != null ? fallback.hologramLines : DEFAULT_HOLOGRAM_LINES;
 
             if (section.isConfigurationSection("hologram")) {
                 ConfigurationSection hologram = section.getConfigurationSection("hologram");
                 if (hologram != null) {
                     hologramEnabled = hologram.getBoolean("enabled", hologramEnabled);
                     hologramOffset = hologram.getDouble("offset-y", hologramOffset);
-                    hologramText = hologram.getString("text", hologramText);
+                    hologramLines = readHologramLines(hologram, hologramLines);
                 }
             } else {
                 hologramEnabled = section.getBoolean("hologram.enabled", hologramEnabled);
                 hologramOffset = section.getDouble("hologram.offset-y", hologramOffset);
-                hologramText = section.getString("hologram.text", hologramText);
+                hologramLines = readLegacyText(section.get("hologram.text"), hologramLines);
             }
 
-            return new BlockSettings(lives, damage, tntOnly, hologramEnabled, hologramOffset, hologramText);
+            return new BlockSettings(lives, damage, tntOnly, hologramEnabled, hologramOffset, hologramLines);
+        }
+
+        private static List<String> readHologramLines(ConfigurationSection section, List<String> fallback) {
+            if (section.isList("lines")) {
+                @SuppressWarnings("unchecked")
+                List<String> lines = (List<String>) section.getList("lines");
+                if (lines != null) {
+                    return sanitizeLines(lines);
+                }
+            }
+            Object value = section.get("text");
+            return readLegacyText(value, fallback);
+        }
+
+        private static List<String> readLegacyText(Object value, List<String> fallback) {
+            if (value instanceof List<?> rawList) {
+                List<String> lines = new ArrayList<>();
+                for (Object entry : rawList) {
+                    if (entry != null) {
+                        lines.add(entry.toString());
+                    }
+                }
+                if (!lines.isEmpty()) {
+                    return sanitizeLines(lines);
+                }
+            }
+            if (value instanceof String text) {
+                return parseMultilineString(text);
+            }
+            return fallback;
+        }
+
+        private static List<String> parseMultilineString(String text) {
+            String prepared = text.replace("\\n", "\n");
+            String[] split = prepared.split("\n");
+            List<String> result = new ArrayList<>(split.length);
+            Collections.addAll(result, split);
+            return sanitizeLines(result);
+        }
+
+        private static List<String> sanitizeLines(List<String> lines) {
+            List<String> result = new ArrayList<>();
+            for (String line : lines) {
+                if (line == null) {
+                    continue;
+                }
+                String sanitized = line.replace("\r", "");
+                result.add(sanitized);
+            }
+            if (result.isEmpty()) {
+                return DEFAULT_HOLOGRAM_LINES;
+            }
+            return List.copyOf(result);
         }
     }
 }

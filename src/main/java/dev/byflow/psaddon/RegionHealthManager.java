@@ -1,6 +1,8 @@
 package dev.byflow.psaddon;
 
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -35,7 +37,11 @@ public final class RegionHealthManager {
         if (location.getWorld() == null) {
             throw new IllegalArgumentException("Location has no world");
         }
-        return location.getWorld().getUID() + ":" + location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ();
+        return toBlockKey(location.getWorld(), location.getBlockX(), location.getBlockY(), location.getBlockZ());
+    }
+
+    public static String toBlockKey(World world, int x, int y, int z) {
+        return world.getUID() + ":" + x + ":" + y + ":" + z;
     }
 
     public void load() {
@@ -89,12 +95,19 @@ public final class RegionHealthManager {
         }
     }
 
-    public RegistrationResult registerRegion(RegionHandle region, int defaultLives, String blockKey, boolean preventStacking) {
+    public RegistrationResult registerRegion(RegionHandle region, int defaultLives, Block block, boolean preventStacking) {
+        String blockKey = block != null ? toBlockKey(block.getLocation()) : null;
         String storageKey = region.getStorageKey();
         if (preventStacking && blockKey != null) {
             String existingRegion = blockIndex.get(blockKey);
             if (existingRegion != null && !Objects.equals(existingRegion, storageKey)) {
                 return RegistrationResult.conflict(existingRegion);
+            }
+            if (block != null) {
+                String conflict = findAdjacentConflict(block, storageKey);
+                if (conflict != null) {
+                    return RegistrationResult.conflict(conflict);
+                }
             }
         }
 
@@ -110,13 +123,17 @@ public final class RegionHealthManager {
         return RegistrationResult.accepted(record.lives());
     }
 
-    public void ensureBlockIndex(RegionHandle region, String blockKey) {
+    public void ensureBlockIndex(RegionHandle region, Block block) {
         String storageKey = region.getStorageKey();
         RegionRecord record = regionRecords.get(storageKey);
         if (record == null) {
             return;
         }
-        if (blockKey != null && !Objects.equals(blockKey, record.blockKey())) {
+        if (block == null) {
+            return;
+        }
+        String blockKey = toBlockKey(block.getLocation());
+        if (!Objects.equals(blockKey, record.blockKey())) {
             regionRecords.put(storageKey, record.withBlock(blockKey));
             blockIndex.put(blockKey, storageKey);
             save();
@@ -171,6 +188,26 @@ public final class RegionHealthManager {
 
     public Optional<String> getRegionKeyByBlock(String blockKey) {
         return Optional.ofNullable(blockIndex.get(blockKey));
+    }
+
+    private String findAdjacentConflict(Block block, String storageKey) {
+        World world = block.getWorld();
+        int baseX = block.getX();
+        int baseY = block.getY();
+        int baseZ = block.getZ();
+        int[][] offsets = {
+                {1, 0, 0}, {-1, 0, 0},
+                {0, 1, 0}, {0, -1, 0},
+                {0, 0, 1}, {0, 0, -1}
+        };
+        for (int[] offset : offsets) {
+            String key = toBlockKey(world, baseX + offset[0], baseY + offset[1], baseZ + offset[2]);
+            String regionKey = blockIndex.get(key);
+            if (regionKey != null && !Objects.equals(regionKey, storageKey)) {
+                return regionKey;
+            }
+        }
+        return null;
     }
 
     public record RegistrationResult(boolean accepted, Integer lives, String conflictingRegionKey) {

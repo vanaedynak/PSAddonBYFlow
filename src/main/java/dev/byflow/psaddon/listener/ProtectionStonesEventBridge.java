@@ -40,11 +40,10 @@ public final class ProtectionStonesEventBridge implements Listener {
         }
         RegionHandle region = hook.wrap(regionObject);
         AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
-        String blockKey = RegionHealthManager.toBlockKey(region.getProtectBlock().getLocation());
         RegionHealthManager.RegistrationResult result = plugin.getRegionHealthManager().registerRegion(
                 region,
                 settings.lives(),
-                blockKey,
+                region.getProtectBlock(),
                 plugin.getAddonSettings().isPreventStacking()
         );
         if (!result.accepted()) {
