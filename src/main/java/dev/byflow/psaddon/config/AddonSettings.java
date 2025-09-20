@@ -70,7 +70,7 @@ public final class AddonSettings {
     ) {
         private static final String DEFAULT_HOLOGRAM_TEXT = "&cЖизни привата: &f{lives}&7/&f{max}";
 
-        BlockSettings {
+        public BlockSettings {
             lives = Math.max(1, lives);
             damagePerExplosion = Math.max(1, damagePerExplosion);
             hologramText = hologramText == null ? DEFAULT_HOLOGRAM_TEXT : hologramText;
