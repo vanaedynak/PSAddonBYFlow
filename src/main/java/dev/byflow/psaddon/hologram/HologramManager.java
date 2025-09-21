@@ -16,6 +16,9 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.NamespacedKey;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.InvocationTargetException;
@@ -33,6 +36,8 @@ import java.util.regex.Pattern;
 public final class HologramManager {
     private static final Pattern HEX_PATTERN = Pattern.compile("(?i)(?:&)?#([0-9a-f]{6})");
     private static final Pattern ANGLED_HEX_PATTERN = Pattern.compile("(?i)<#([0-9a-f]{6})>");
+    private static final Pattern LEGACY_NAME_PATTERN = Pattern.compile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_.+");
+    private static final String HOLOGRAM_PREFIX = "psaddon_";
 
     private final PSAddonPlugin plugin;
     private final Renderer renderer;
@@ -43,6 +48,8 @@ public final class HologramManager {
     }
 
     public void restoreAll(RegionHealthManager healthManager, ProtectionStonesHook hook) {
+        renderer.purgeOrphans();
+
         healthManager.getRegionLivesView().forEach((key, lives) ->
                 hook.findRegionByKey(key).ifPresent(region -> {
                     AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
@@ -155,14 +162,18 @@ public final class HologramManager {
         void remove(RegionHandle region);
 
         void removeAll();
+
+        void purgeOrphans();
     }
 
     private static final class VanillaHologramRenderer implements Renderer {
         private final PSAddonPlugin plugin;
         private final Map<String, UUID> holograms = new HashMap<>();
+        private final NamespacedKey storageKey;
 
         private VanillaHologramRenderer(PSAddonPlugin plugin) {
             this.plugin = plugin;
+            this.storageKey = new NamespacedKey(plugin, "hologram");
         }
 
         @Override
@@ -180,12 +191,14 @@ public final class HologramManager {
             display.setSeeThrough(false);
             display.setPersistent(true);
             display.setShadowed(false);
+            tag(display, region.getStorageKey());
         }
 
         @Override
         public void remove(RegionHandle region) {
             UUID id = holograms.remove(region.getStorageKey());
             if (id == null) {
+                removeTagged(region.getStorageKey());
                 return;
             }
             Entity entity = Bukkit.getEntity(id);
@@ -202,7 +215,10 @@ public final class HologramManager {
             }
             if (entity != null) {
                 entity.remove();
+                return;
             }
+
+            removeTagged(region.getStorageKey());
         }
 
         @Override
@@ -216,6 +232,7 @@ public final class HologramManager {
                 }
             });
             holograms.clear();
+            purgeOrphans();
         }
 
         private TextDisplay obtain(RegionHandle region, Location location) {
@@ -233,33 +250,70 @@ public final class HologramManager {
                 spawned.setBillboard(Display.Billboard.CENTER);
             });
             holograms.put(region.getStorageKey(), display.getUniqueId());
+            tag(display, region.getStorageKey());
             return display;
+        }
+
+        @Override
+        public void purgeOrphans() {
+            for (World world : plugin.getServer().getWorlds()) {
+                for (TextDisplay display : world.getEntitiesByClass(TextDisplay.class)) {
+                    PersistentDataContainer container = display.getPersistentDataContainer();
+                    if (container.has(storageKey, PersistentDataType.STRING)) {
+                        display.remove();
+                    }
+                }
+            }
+            holograms.clear();
+        }
+
+        private void tag(TextDisplay display, String value) {
+            display.getPersistentDataContainer().set(storageKey, PersistentDataType.STRING, value);
+        }
+
+        private void removeTagged(String storageKeyValue) {
+            for (World world : plugin.getServer().getWorlds()) {
+                for (TextDisplay display : world.getEntitiesByClass(TextDisplay.class)) {
+                    String value = display.getPersistentDataContainer().get(this.storageKey, PersistentDataType.STRING);
+                    if (storageKeyValue.equals(value)) {
+                        display.remove();
+                    }
+                }
+            }
         }
     }
 
     private static final class DecentHologramRenderer implements Renderer {
         private final Class<?> dhapiClass;
+        private final Class<?> hologramClass;
         private final Method createWithLines;
         private final Method createSimple;
         private final Method removeMethod;
         private final Method getMethod;
         private final Method setLinesMethod;
+        private final Method getAllMethod;
+        private final Method getNameMethod;
         private final Map<String, String> hologramNames = new HashMap<>();
 
         private DecentHologramRenderer() throws ReflectiveOperationException {
             this.dhapiClass = Class.forName("eu.decentsoftware.holograms.api.DHAPI");
+            this.hologramClass = Class.forName("eu.decentsoftware.holograms.api.holograms.Hologram");
             this.createWithLines = resolveMethod("createHologram", String.class, Location.class, boolean.class, List.class);
             this.createSimple = resolveMethod("createHologram", String.class, Location.class, boolean.class);
             this.removeMethod = dhapiClass.getMethod("removeHologram", String.class);
             this.getMethod = dhapiClass.getMethod("getHologram", String.class);
-            this.setLinesMethod = resolveMethod("setHologramLines",
-                    Class.forName("eu.decentsoftware.holograms.api.holograms.Hologram"), List.class);
+            this.setLinesMethod = resolveMethod("setHologramLines", hologramClass, List.class);
+            this.getAllMethod = resolveMethod("getHolograms");
+            this.getNameMethod = resolveHologramMethod("getName");
         }
 
         @Override
         public void update(RegionHandle region, Location location, List<String> lines) {
-            String name = hologramNames.computeIfAbsent(region.getStorageKey(), key -> sanitizeName(key));
-            remove(region);
+            String storageKey = region.getStorageKey();
+            String name = sanitizeName(storageKey);
+            hologramNames.put(storageKey, name);
+            removeByName(name);
+            removeByName(legacyName(storageKey));
             List<String> colored = new ArrayList<>(lines.size());
             for (String line : lines) {
                 colored.add(ChatColor.translateAlternateColorCodes('&', line));
@@ -280,8 +334,73 @@ public final class HologramManager {
 
         @Override
         public void remove(RegionHandle region) {
-            String name = hologramNames.remove(region.getStorageKey());
+            String storageKey = region.getStorageKey();
+            String name = hologramNames.remove(storageKey);
             if (name == null) {
+                name = sanitizeName(storageKey);
+            }
+            removeByName(name);
+            removeByName(legacyName(storageKey));
+        }
+
+        @Override
+        public void removeAll() {
+            for (String name : new ArrayList<>(hologramNames.values())) {
+                removeByName(name);
+            }
+            hologramNames.clear();
+            purgeOrphans();
+        }
+
+        @Override
+        public void purgeOrphans() {
+            if (getAllMethod == null || getNameMethod == null) {
+                return;
+            }
+            try {
+                Object result = getAllMethod.invoke(null);
+                if (result instanceof Iterable<?> iterable) {
+                    for (Object hologram : iterable) {
+                        String name = (String) getNameMethod.invoke(hologram);
+                        if (name != null && isAddonName(name)) {
+                            removeByName(name);
+                        }
+                    }
+                }
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+            }
+        }
+
+        private Method resolveMethod(String name, Class<?>... types) {
+            try {
+                return dhapiClass.getMethod(name, types);
+            } catch (NoSuchMethodException ex) {
+                return null;
+            }
+        }
+
+        private String sanitizeName(String storageKey) {
+            return HOLOGRAM_PREFIX + storageKey.replace(':', '_').replace('/', '_');
+        }
+
+        private boolean isAddonName(String name) {
+            return name.startsWith(HOLOGRAM_PREFIX) || LEGACY_NAME_PATTERN.matcher(name).matches();
+        }
+
+        private String legacyName(String storageKey) {
+            return storageKey.replace(':', '_').replace('/', '_');
+        }
+
+        private Method resolveHologramMethod(String name, Class<?>... types) {
+            try {
+                return hologramClass.getMethod(name, types);
+            } catch (NoSuchMethodException ex) {
+                return null;
+            }
+        }
+
+        private void removeByName(String name) {
+            if (name == null || name.isEmpty()) {
                 return;
             }
             try {
@@ -294,31 +413,7 @@ public final class HologramManager {
                 }
                 removeMethod.invoke(null, name);
             } catch (IllegalAccessException | InvocationTargetException ignored) {
-                // ignore, hologram will be re-created on next update
             }
-        }
-
-        @Override
-        public void removeAll() {
-            for (String name : hologramNames.values()) {
-                try {
-                    removeMethod.invoke(null, name);
-                } catch (IllegalAccessException | InvocationTargetException ignored) {
-                }
-            }
-            hologramNames.clear();
-        }
-
-        private Method resolveMethod(String name, Class<?>... types) {
-            try {
-                return dhapiClass.getMethod(name, types);
-            } catch (NoSuchMethodException ex) {
-                return null;
-            }
-        }
-
-        private String sanitizeName(String storageKey) {
-            return storageKey.replace(':', '_').replace('/', '_');
         }
     }
 }
