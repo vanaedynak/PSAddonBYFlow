@@ -1,0 +1,17 @@
+dependencies {
+    compileOnly "com.github.espidev:ProtectionStones:${protectionStonesVersion}"
+}
+
+tasks.named('jar') {
+    archiveBaseName.set('PSAddonRegions')
+}
+
+tasks.named('processResources') {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(
+            'name': 'PSAddonRegions',
+            'version': project.version
+        )
+    }
+}

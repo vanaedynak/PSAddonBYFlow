@@ -3,4 +3,6 @@ gradle/wrapper/gradle-wrapper.jar
 
 # Build outputs
 build/
+**/build/
+.gradle/
 *.log

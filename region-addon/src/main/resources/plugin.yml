@@ -1,6 +1,6 @@
-name: PSAddonBYFlow
+name: ${name}
 main: dev.byflow.psaddon.PSAddonPlugin
-version: 0.1.0
+version: ${version}
 author: BYFlow
 api-version: '1.20'
 softdepend:

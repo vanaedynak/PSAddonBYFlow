@@ -1,93 +1,49 @@
-plugins {
-    id 'java'
+ext {
+    paperApiVersion = '1.21.1-R0.1-SNAPSHOT'
+    protectionStonesVersion = 'v2.10.5'
 }
 
-group = 'dev.byflow'
-version = '0.2.0'
-description = 'ProtectionStones durability addon and configurable custom TNT plugins.'
+allprojects {
+    group = 'dev.byflow'
+    version = '0.2.0'
+}
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+        withSourcesJar()
     }
-}
 
-sourceSets {
-    main {
-        java.srcDir 'src/main/java'
-        resources.srcDir 'src/main/resources'
+    repositories {
+        mavenCentral()
+        maven {
+            name = 'papermc'
+            url = uri('https://repo.papermc.io/repository/maven-public/')
+        }
+        maven {
+            name = 'sirblobman'
+            url = uri('https://nexus.sirblobman.xyz/public/')
+        }
+        maven {
+            name = 'jitpack'
+            url = uri('https://jitpack.io')
+        }
     }
-    customTnt {
-        java.srcDir 'src/customTnt/java'
-        resources.srcDir 'src/customTnt/resources'
-        compileClasspath += sourceSets.main.compileClasspath
-        runtimeClasspath += sourceSets.main.runtimeClasspath
+
+    dependencies {
+        compileOnly "io.papermc.paper:paper-api:${paperApiVersion}"
     }
-}
 
-configurations {
-    customTntImplementation.extendsFrom implementation
-    customTntCompileOnly.extendsFrom compileOnly
-    customTntRuntimeOnly.extendsFrom runtimeOnly
-}
-
-repositories {
-    mavenCentral()
-    maven {
-        name = 'papermc'
-        url = uri('https://repo.papermc.io/repository/maven-public/')
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 21
     }
-    maven {
-        name = 'sirblobman'
-        url = uri('https://nexus.sirblobman.xyz/public/')
-    }
-}
 
-dependencies {
-    compileOnly 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'
-    compileOnly 'dev.espi:protectionstones:2.10.5'
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.release = 21
-}
-
-final def regionPluginName = 'PSAddonRegions'
-final def customTntPluginName = 'PSAddonCustomTnt'
-
-tasks.named('jar') {
-    archiveBaseName.set(regionPluginName)
-}
-
-tasks.register('customTntJar', Jar) {
-    group = 'build'
-    description = 'Assembles the custom TNT addon plugin jar.'
-    archiveBaseName.set(customTntPluginName)
-    from sourceSets.customTnt.output
-    dependsOn tasks.named('compileCustomTntJava'), tasks.named('processCustomTntResources')
-}
-
-tasks.named('assemble') {
-    dependsOn tasks.named('customTntJar')
-}
-
-processResources {
-    filteringCharset = 'UTF-8'
-    filesMatching('plugin.yml') {
-        expand(
-            'name': regionPluginName,
-            'version': project.version
-        )
-    }
-}
-
-tasks.named('processCustomTntResources') {
-    filteringCharset = 'UTF-8'
-    filesMatching('plugin.yml') {
-        expand(
-            'name': customTntPluginName,
-            'version': project.version
-        )
+    tasks.named('jar') {
+        archiveVersion.set(project.version.toString())
     }
 }

@@ -7,7 +7,7 @@
 
 ## Сборка
 1. Убедитесь, что установлены JDK 21 и Gradle 8+. Выполните `gradle assemble` (или `./gradlew assemble`, если используете локальный wrapper).
-2. В каталоге `build/libs` появятся два файла: `PSAddonRegions-{version}.jar` и `PSAddonCustomTnt-{version}.jar`.
+2. После сборки заберите артефакты из каталогов модулей: `region-addon/build/libs/PSAddonRegions-{version}.jar` и `custom-tnt/build/libs/PSAddonCustomTnt-{version}.jar`.
 3. Поместите оба плагина в папку `plugins` сервера вместе с установленным ProtectionStones и перезапустите сервер.
 
 ## Плагин PSAddonRegions
