@@ -5,6 +5,7 @@ import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
 import dev.byflow.psaddon.listener.WitherProtectionListener;
+import dev.byflow.psaddon.RegionHandle;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -102,6 +103,7 @@ public final class PSAddonPlugin extends JavaPlugin {
         cfg.addDefault("default.lives", 3);
         cfg.addDefault("default.damage-per-explosion", 1);
         cfg.addDefault("default.tnt-only", true);
+        cfg.addDefault("default.allowed-custom-tnt", List.of("region_breaker"));
         cfg.addDefault("default.hologram.enabled", true);
         cfg.addDefault("default.hologram.offset-y", 1.8);
         cfg.addDefault("default.hologram.lines", List.of(

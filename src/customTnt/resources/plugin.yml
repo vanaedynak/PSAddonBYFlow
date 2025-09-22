@@ -1,0 +1,14 @@
+name: ${name}
+main: dev.byflow.psaddon.tnt.CustomTntPlugin
+version: ${version}
+author: BYFlow
+api-version: '1.20'
+commands:
+  customtnt:
+    description: Управление кастомными динамитами PSAddon.
+    usage: /<command> give <игрок> <тип> [кол-во]
+    permission: psaddon.customtnt.give
+permissions:
+  psaddon.customtnt.give:
+    description: Позволяет выдавать кастомные динамиты игрокам.
+    default: op

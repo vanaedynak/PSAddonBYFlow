@@ -1,0 +1,61 @@
+# Конфигурация кастомных динамитов.
+# Каждый ключ внутри секции tnts — это идентификатор динамита.
+tnts:
+  region_breaker:
+    display-name: "&cRegion Breaker"
+    lore:
+      - "&7Ломает только регионы ProtectionStones"
+      - "&7и не повреждает блоки"
+    material: TNT
+    auto-ignite-when-placed: false
+    drop-when-broken: true
+    ignite-in-water: true
+    fuse-ticks: 80
+    explosion-power: 4.0
+    affects-regions: true
+    only-damage-regions: true
+    block-damage:
+      mode: NONE
+  obsidian_miner:
+    display-name: "&6Obsidian Miner"
+    lore:
+      - "&7Взрывает крепкие блоки"
+      - "&7и может работать под водой"
+    material: TNT
+    auto-ignite-when-placed: true
+    drop-when-broken: false
+    ignite-in-water: true
+    fuse-ticks: 60
+    explosion-power: 5.0
+    affects-regions: false
+    only-damage-regions: false
+    block-damage:
+      mode: ALLOW_LIST
+      blocks:
+        - OBSIDIAN
+        - CRYING_OBSIDIAN
+        - ANCIENT_DEBRIS
+        - RESPAWN_ANCHOR
+      force-break:
+        - OBSIDIAN
+        - CRYING_OBSIDIAN
+        - ANCIENT_DEBRIS
+  bedrock_cracker:
+    display-name: "&5Bedrock Cracker"
+    lore:
+      - "&cОпасный заряд"
+      - "&7Работает только на бедроке"
+    material: TNT
+    auto-ignite-when-placed: true
+    drop-when-broken: false
+    ignite-in-water: false
+    fuse-ticks: 40
+    explosion-power: 3.5
+    affects-regions: false
+    only-damage-regions: false
+    block-damage:
+      mode: ALLOW_LIST
+      blocks:
+        - BEDROCK
+      force-break:
+        - BEDROCK

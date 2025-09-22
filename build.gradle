@@ -3,13 +3,32 @@ plugins {
 }
 
 group = 'dev.byflow'
-version = '0.1.0'
-description = 'ProtectionStones addon that adds region durability mechanics.'
+version = '0.2.0'
+description = 'ProtectionStones durability addon and configurable custom TNT plugins.'
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+}
+
+sourceSets {
+    main {
+        java.srcDir 'src/main/java'
+        resources.srcDir 'src/main/resources'
+    }
+    customTnt {
+        java.srcDir 'src/customTnt/java'
+        resources.srcDir 'src/customTnt/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    customTntImplementation.extendsFrom implementation
+    customTntCompileOnly.extendsFrom compileOnly
+    customTntRuntimeOnly.extendsFrom runtimeOnly
 }
 
 repositories {
@@ -34,15 +53,40 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+final def regionPluginName = 'PSAddonRegions'
+final def customTntPluginName = 'PSAddonCustomTnt'
+
 tasks.named('jar') {
-    archiveBaseName.set('PSAddonBYFlow')
+    archiveBaseName.set(regionPluginName)
+}
+
+tasks.register('customTntJar', Jar) {
+    group = 'build'
+    description = 'Assembles the custom TNT addon plugin jar.'
+    archiveBaseName.set(customTntPluginName)
+    from sourceSets.customTnt.output
+    dependsOn tasks.named('compileCustomTntJava'), tasks.named('processCustomTntResources')
+}
+
+tasks.named('assemble') {
+    dependsOn tasks.named('customTntJar')
 }
 
 processResources {
     filteringCharset = 'UTF-8'
     filesMatching('plugin.yml') {
         expand(
-            'name': 'PSAddonBYFlow',
+            'name': regionPluginName,
+            'version': project.version
+        )
+    }
+}
+
+tasks.named('processCustomTntResources') {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(
+            'name': customTntPluginName,
             'version': project.version
         )
     }
