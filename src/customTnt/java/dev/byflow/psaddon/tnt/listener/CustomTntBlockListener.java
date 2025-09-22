@@ -81,7 +81,7 @@ public final class CustomTntBlockListener implements Listener {
         CustomTntType type = typeOptional.get();
         manager.unregisterBlock(block);
         block.setType(Material.AIR, false);
-        manager.spawnPrimed(block.getLocation(), type, event.getPrimingEntity());
+        manager.spawnPrimed(block.getLocation(), type, event.getPrimerEntity());
         plugin.getStorage().save();
     }
 
