@@ -3,7 +3,7 @@ package dev.byflow.psaddon.tnt.listener;
 import dev.byflow.psaddon.tnt.CustomTntManager;
 import dev.byflow.psaddon.tnt.CustomTntPlugin;
 import dev.byflow.psaddon.tnt.config.CustomTntType;
-import io.papermc.paper.event.block.TNTPrimeEvent;
+import com.destroystokyo.paper.event.block.TNTPrimeEvent;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
