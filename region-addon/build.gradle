@@ -1,5 +1,5 @@
 dependencies {
-    compileOnly "com.github.espidev:ProtectionStones:${protectionStonesVersion}"
+    compileOnly "com.github.EspiDev:ProtectionStones:${protectionStonesVersion}"
 }
 
 tasks.named('jar') {
