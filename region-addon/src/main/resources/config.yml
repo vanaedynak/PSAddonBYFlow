@@ -7,9 +7,6 @@ default:
   damage-per-explosion: 1
   # true — реагировать только на динамит; false — учитывать любые взрывы.
   tnt-only: true
-  # Разрешённые кастомные динамиты (идентификаторы из плагина кастомных TNT).
-  allowed-custom-tnt:
-    - region_breaker
   hologram:
     # Показывать ли голограмму с жизнями.
     enabled: true

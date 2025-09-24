@@ -2,7 +2,6 @@ package dev.byflow.psaddon.listener;
 
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.config.AddonSettings;
-import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TNTPrimed;
@@ -10,17 +9,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
-
-import java.util.Locale;
-import java.util.Objects;
 
 public final class ExplosionListener implements Listener {
-    private static final NamespacedKey CUSTOM_TNT_ID = Objects.requireNonNull(NamespacedKey.fromString("psaddon:custom_tnt_id"));
-    private static final NamespacedKey CUSTOM_TNT_FLAGS = Objects.requireNonNull(NamespacedKey.fromString("psaddon:custom_tnt_flags"));
-    private static final int FLAG_AFFECTS_REGIONS = 0x1;
-
     private final PSAddonPlugin plugin;
 
     public ExplosionListener(PSAddonPlugin plugin) {
@@ -53,20 +43,7 @@ public final class ExplosionListener implements Listener {
         if (!settings.tntOnly()) {
             return true;
         }
-        if (!(source instanceof TNTPrimed primed)) {
-            return false;
-        }
-        PersistentDataContainer container = primed.getPersistentDataContainer();
-        String rawId = container.get(CUSTOM_TNT_ID, PersistentDataType.STRING);
-        if (rawId == null) {
-            return false;
-        }
-        String normalizedId = rawId.toLowerCase(Locale.ROOT);
-        if (!settings.allowedCustomTnt().isEmpty() && !settings.allowedCustomTnt().contains(normalizedId)) {
-            return false;
-        }
-        Integer flags = container.get(CUSTOM_TNT_FLAGS, PersistentDataType.INTEGER);
-        return flags != null && (flags & FLAG_AFFECTS_REGIONS) != 0;
+        return source instanceof TNTPrimed;
     }
 
     private void protectBlock(EntityExplodeEvent event, Block block) {

@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -70,13 +69,10 @@ public final class AddonSettings {
             boolean tntOnly,
             boolean hologramEnabled,
             double hologramOffset,
-            List<String> hologramLines,
-            List<String> allowedCustomTnt
+            List<String> hologramLines
     ) {
         private static final List<String> DEFAULT_HOLOGRAM_LINES =
                 List.of("&cЖизни привата: &f{lives}&7/&f{max}");
-        private static final List<String> DEFAULT_ALLOWED_TNT =
-                List.of("region_breaker");
 
         public BlockSettings {
             lives = Math.max(1, lives);
@@ -84,7 +80,6 @@ public final class AddonSettings {
             hologramLines = hologramLines == null || hologramLines.isEmpty()
                     ? DEFAULT_HOLOGRAM_LINES
                     : List.copyOf(hologramLines);
-            allowedCustomTnt = normalizeTntList(allowedCustomTnt);
         }
 
         static BlockSettings from(ConfigurationSection section, BlockSettings fallback) {
@@ -95,7 +90,6 @@ public final class AddonSettings {
             boolean hologramEnabled = fallback != null ? fallback.hologramEnabled : true;
             double hologramOffset = fallback != null ? fallback.hologramOffset : 1.8;
             List<String> hologramLines = fallback != null ? fallback.hologramLines : DEFAULT_HOLOGRAM_LINES;
-            List<String> allowedCustomTnt = fallback != null ? fallback.allowedCustomTnt : DEFAULT_ALLOWED_TNT;
 
             if (section.isConfigurationSection("hologram")) {
                 ConfigurationSection hologram = section.getConfigurationSection("hologram");
@@ -110,11 +104,7 @@ public final class AddonSettings {
                 hologramLines = readLegacyText(section.get("hologram.text"), hologramLines);
             }
 
-            if (section.contains("allowed-custom-tnt")) {
-                allowedCustomTnt = readAllowedTnt(section.get("allowed-custom-tnt"), allowedCustomTnt);
-            }
-
-            return new BlockSettings(lives, damage, tntOnly, hologramEnabled, hologramOffset, hologramLines, allowedCustomTnt);
+            return new BlockSettings(lives, damage, tntOnly, hologramEnabled, hologramOffset, hologramLines);
         }
 
         private static List<String> readHologramLines(ConfigurationSection section, List<String> fallback) {
@@ -170,43 +160,5 @@ public final class AddonSettings {
             return List.copyOf(result);
         }
 
-        private static List<String> readAllowedTnt(Object raw, List<String> fallback) {
-            if (raw instanceof List<?> list) {
-                List<String> collected = new ArrayList<>();
-                for (Object entry : list) {
-                    if (entry != null) {
-                        collected.add(entry.toString());
-                    }
-                }
-                if (collected.isEmpty()) {
-                    return List.of();
-                }
-                return normalizeTntList(collected);
-            }
-            if (raw instanceof String single) {
-                return normalizeTntList(List.of(single));
-            }
-            return fallback;
-        }
-
-        private static List<String> normalizeTntList(List<String> values) {
-            if (values == null) {
-                return List.of();
-            }
-            List<String> normalized = new ArrayList<>();
-            for (String value : values) {
-                if (value == null) {
-                    continue;
-                }
-                String trimmed = value.trim();
-                if (!trimmed.isEmpty()) {
-                    normalized.add(trimmed.toLowerCase(Locale.ROOT));
-                }
-            }
-            if (normalized.isEmpty()) {
-                return List.of();
-            }
-            return List.copyOf(normalized);
-        }
     }
 }

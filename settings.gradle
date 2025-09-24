@@ -1,2 +1,2 @@
 rootProject.name = "PSAddonBYFlow"
-include("region-addon", "custom-tnt")
+include("region-addon")
