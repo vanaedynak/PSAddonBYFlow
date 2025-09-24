@@ -1,49 +1,57 @@
-ext {
-    paperApiVersion = '1.21.1-R0.1-SNAPSHOT'
-    protectionStonesVersion = 'v2.10.5'
+plugins {
+    id 'java'
 }
 
-allprojects {
-    group = 'dev.byflow'
-    version = '0.2.0'
+group = 'dev.byflow'
+version = '0.2.0'
+
+def paperApiVersion = '1.21.1-R0.1-SNAPSHOT'
+def protectionStonesVersion = 'v2.10.5'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
 }
 
-subprojects {
-    apply plugin: 'java'
-
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
-        }
-        withSourcesJar()
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = uri('https://repo.papermc.io/repository/maven-public/')
     }
-
-    repositories {
-        mavenCentral()
-        maven {
-            name = 'papermc'
-            url = uri('https://repo.papermc.io/repository/maven-public/')
-        }
-        maven {
-            name = 'sirblobman'
-            url = uri('https://nexus.sirblobman.xyz/public/')
-        }
-        maven {
-            name = 'jitpack'
-            url = uri('https://jitpack.io')
-        }
+    maven {
+        name = 'sirblobman'
+        url = uri('https://nexus.sirblobman.xyz/public/')
     }
-
-    dependencies {
-        compileOnly "io.papermc.paper:paper-api:${paperApiVersion}"
+    maven {
+        name = 'jitpack'
+        url = uri('https://jitpack.io')
     }
+}
 
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = 'UTF-8'
-        options.release = 21
-    }
+dependencies {
+    compileOnly "io.papermc.paper:paper-api:${paperApiVersion}"
+    compileOnly "com.github.EspiDev:ProtectionStones:${protectionStonesVersion}"
+}
 
-    tasks.named('jar') {
-        archiveVersion.set(project.version.toString())
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.named('jar') {
+    archiveBaseName.set('PSAddonBYFlow')
+    archiveVersion.set(project.version.toString())
+}
+
+tasks.named('processResources') {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(
+                'name': 'PSAddonBYFlow',
+                'version': project.version
+        )
     }
 }
