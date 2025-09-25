@@ -1,8 +1,8 @@
 package dev.byflow.psaddon.listener;
 
-import dev.byflow.customtnt.api.RegionTNTType;
-import dev.byflow.customtnt.api.event.CustomTNTPreAffectEvent;
-import dev.byflow.customtnt.api.event.RegionTNTDetonateEvent;
+import dev.byflow.customtntflow.api.RegionTNTType;
+import dev.byflow.customtntflow.api.event.CustomTNTPreAffectEvent;
+import dev.byflow.customtntflow.api.event.RegionTNTDetonateEvent;
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.config.AddonSettings;

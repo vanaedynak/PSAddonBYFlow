@@ -1,6 +1,6 @@
 package dev.byflow.psaddon;
 
-import dev.byflow.customtnt.api.RegionTNTAPI;
+import dev.byflow.customtntflow.api.RegionTNTAPI;
 import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
