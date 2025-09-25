@@ -1,10 +1,10 @@
-package dev.byflow.customtnt.api.event;
+package dev.byflow.customtntflow.api.event;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import dev.byflow.customtnt.api.RegionTNTType;
+import dev.byflow.customtntflow.api.RegionTNTType;
 import org.bukkit.block.Block;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.Cancellable;

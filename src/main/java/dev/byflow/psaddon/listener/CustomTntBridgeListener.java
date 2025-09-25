@@ -1,5 +1,6 @@
 package dev.byflow.psaddon.listener;
 
+import dev.byflow.customtntflow.api.MutableBlockBehavior;
 import dev.byflow.customtntflow.api.RegionTNTType;
 import dev.byflow.customtntflow.api.event.CustomTNTPreAffectEvent;
 import dev.byflow.customtntflow.api.event.RegionTNTDetonateEvent;
@@ -29,7 +30,7 @@ public final class CustomTntBridgeListener implements Listener {
         if (!shouldHandle(event.getType())) {
             return;
         }
-        CustomTNTPreAffectEvent.MutableBlockBehavior behavior = event.getBehavior();
+        MutableBlockBehavior behavior = event.getBehavior();
         behavior.setBreakBlocks(false);
         behavior.setDropBlocks(false);
         behavior.setApiOnly(true);

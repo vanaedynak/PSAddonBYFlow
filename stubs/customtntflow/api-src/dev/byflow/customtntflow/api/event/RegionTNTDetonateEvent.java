@@ -1,28 +1,26 @@
-package dev.byflow.customtnt.api.event;
+package dev.byflow.customtntflow.api.event;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import dev.byflow.customtnt.api.RegionTNTType;
+import dev.byflow.customtntflow.api.RegionTNTType;
 import org.bukkit.block.Block;
-import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
+import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
-public class CustomTNTExplodeEvent extends Event {
+public class RegionTNTDetonateEvent extends Event implements Cancellable {
     private static final HandlerList HANDLERS = new HandlerList();
 
     private final RegionTNTType type;
     private final TNTPrimed tnt;
-    private final Set<Block> blocks = new HashSet<>();
-    private final Player owner;
+    private final Set<Block> affectedBlocks = new HashSet<>();
+    private boolean cancelled;
 
-    public CustomTNTExplodeEvent(RegionTNTType type, TNTPrimed tnt, Player owner) {
+    public RegionTNTDetonateEvent(RegionTNTType type, TNTPrimed tnt) {
         this.type = type;
         this.tnt = tnt;
-        this.owner = owner;
     }
 
     public RegionTNTType getType() {
@@ -33,12 +31,18 @@ public class CustomTNTExplodeEvent extends Event {
         return tnt;
     }
 
-    public Player getOwner() {
-        return owner;
+    public Set<Block> getAffectedBlocks() {
+        return affectedBlocks;
     }
 
-    public Set<Block> getBlocks() {
-        return Collections.unmodifiableSet(blocks);
+    @Override
+    public boolean isCancelled() {
+        return cancelled;
+    }
+
+    @Override
+    public void setCancelled(boolean cancel) {
+        this.cancelled = cancel;
     }
 
     @Override

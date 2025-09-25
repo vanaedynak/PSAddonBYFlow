@@ -1,4 +1,4 @@
-package dev.byflow.customtnt.api;
+package dev.byflow.customtntflow.api;
 
 import java.util.Optional;
 

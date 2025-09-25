@@ -1,26 +1,25 @@
-package dev.byflow.customtnt.api.event;
+package dev.byflow.customtntflow.api.event;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import dev.byflow.customtnt.api.RegionTNTType;
+import dev.byflow.customtntflow.api.MutableBlockBehavior;
+import dev.byflow.customtntflow.api.RegionTNTType;
 import org.bukkit.block.Block;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
-public class RegionTNTDetonateEvent extends Event implements Cancellable {
+public class CustomTNTPreAffectEvent extends Event implements Cancellable {
     private static final HandlerList HANDLERS = new HandlerList();
 
     private final RegionTNTType type;
     private final TNTPrimed tnt;
-    private final Set<Block> affectedBlocks = new HashSet<>();
+    private final MutableBlockBehavior behavior;
     private boolean cancelled;
 
-    public RegionTNTDetonateEvent(RegionTNTType type, TNTPrimed tnt) {
+    public CustomTNTPreAffectEvent(RegionTNTType type, TNTPrimed tnt) {
         this.type = type;
         this.tnt = tnt;
+        this.behavior = new MutableBlockBehavior();
     }
 
     public RegionTNTType getType() {
@@ -31,8 +30,8 @@ public class RegionTNTDetonateEvent extends Event implements Cancellable {
         return tnt;
     }
 
-    public Set<Block> getAffectedBlocks() {
-        return affectedBlocks;
+    public MutableBlockBehavior getBehavior() {
+        return behavior;
     }
 
     @Override
@@ -53,4 +52,5 @@ public class RegionTNTDetonateEvent extends Event implements Cancellable {
     public static HandlerList getHandlerList() {
         return HANDLERS;
     }
+
 }
