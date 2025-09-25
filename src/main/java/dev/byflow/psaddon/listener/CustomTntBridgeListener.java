@@ -1,7 +1,7 @@
 package dev.byflow.psaddon.listener;
 
 import dev.byflow.customtntflow.api.MutableBlockBehavior;
-import dev.byflow.customtntflow.api.RegionTNTType;
+import dev.byflow.customtntflow.api.RegionTNTAPI;
 import dev.byflow.customtntflow.api.event.CustomTNTPreAffectEvent;
 import dev.byflow.customtntflow.api.event.RegionTNTDetonateEvent;
 import dev.byflow.psaddon.PSAddonPlugin;
@@ -9,14 +9,17 @@ import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.config.AddonSettings.CustomTntSettings;
 import org.bukkit.block.Block;
+import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
+import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
 
 public final class CustomTntBridgeListener implements Listener {
     private final PSAddonPlugin plugin;
@@ -27,7 +30,7 @@ public final class CustomTntBridgeListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPreAffect(CustomTNTPreAffectEvent event) {
-        if (!shouldHandle(event.getType())) {
+        if (resolveSettings(event.getTnt()).isEmpty()) {
             return;
         }
         MutableBlockBehavior behavior = event.getBehavior();
@@ -38,7 +41,7 @@ public final class CustomTntBridgeListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDetonate(RegionTNTDetonateEvent event) {
-        Optional<CustomTntSettings> maybeSettings = resolveSettings(event.getType());
+        Optional<CustomTntSettings> maybeSettings = resolveSettings(event.getTnt());
         if (maybeSettings.isEmpty()) {
             return;
         }
@@ -72,14 +75,38 @@ public final class CustomTntBridgeListener implements Listener {
         }
     }
 
-    private boolean shouldHandle(RegionTNTType type) {
-        return resolveSettings(type).isPresent();
-    }
-
-    private Optional<CustomTntSettings> resolveSettings(RegionTNTType type) {
-        if (type == null) {
+    private Optional<CustomTntSettings> resolveSettings(TNTPrimed primed) {
+        String typeId = resolveTypeId(primed);
+        if (typeId == null) {
             return Optional.empty();
         }
-        return plugin.getAddonSettings().resolveCustomTnt(type.getId());
+        return plugin.getAddonSettings().resolveCustomTnt(typeId);
+    }
+
+    private String resolveTypeId(TNTPrimed primed) {
+        if (primed == null) {
+            return null;
+        }
+        RegionTNTAPI api = plugin.getRegionTntApi();
+        if (api == null) {
+            return null;
+        }
+        try {
+            Object type = api.getType(primed);
+            if (type == null) {
+                return null;
+            }
+            try {
+                Method method = type.getClass().getMethod("getId");
+                Object value = method.invoke(type);
+                return value != null ? value.toString() : null;
+            } catch (ReflectiveOperationException reflectionError) {
+                plugin.getLogger().log(Level.WARNING, "Failed to access CustomTNTFlow type identifier", reflectionError);
+                return null;
+            }
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.WARNING, "Failed to resolve CustomTNTFlow type", throwable);
+            return null;
+        }
     }
 }

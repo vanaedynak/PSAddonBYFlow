@@ -85,6 +85,10 @@ public final class PSAddonPlugin extends JavaPlugin {
         return addonSettings;
     }
 
+    public RegionTNTAPI getRegionTntApi() {
+        return regionTntApi;
+    }
+
     public boolean isCustomTnt(Entity entity) {
         if (!(entity instanceof TNTPrimed primed) || regionTntApi == null) {
             return false;
