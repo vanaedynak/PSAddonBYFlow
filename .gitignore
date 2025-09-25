@@ -1,0 +1,11 @@
+# Ignore Gradle wrapper JAR to keep repository free of binaries
+gradle/wrapper/gradle-wrapper.jar
+
+# Build outputs
+build/
+**/build/
+.gradle/
+*.log
+
+# Local API stubs
+libs/*.jar
