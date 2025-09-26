@@ -236,7 +236,16 @@ public final class CustomTntResolver {
             return null;
         }
         try {
-            return NBT.get(primed, nbt -> readMarkerFromCompound(nbt, key));
+            Function<ReadableNBT, String> reader = new Function<>() {
+                @Override
+                public String apply(ReadableNBT nbt) {
+                    if (nbt instanceof NBTCompound compound) {
+                        return readMarkerFromCompound(compound, key);
+                    }
+                    return null;
+                }
+            };
+            return NBT.get(primed, reader);
         } catch (Throwable throwable) {
             plugin.getLogger().log(Level.FINEST, "Failed to read NBT marker " + key, throwable);
             return null;
