@@ -77,8 +77,9 @@ public final class AddonSettings {
                     boolean cancelEmpty = typeSection.getBoolean("cancel-when-empty", true);
                     String matchType = sanitizeKey(typeSection.getString("type", key));
                     Map<String, String> traitMatchers = readTraitMatchers(typeSection.getConfigurationSection("traits"));
+                    Map<String, String> markerMatchers = readMarkerMatchers(typeSection.getConfigurationSection("nbt-markers"));
 
-                    CustomTntSettings settings = new CustomTntSettings(matchType, traitMatchers, override, onlyRegions, cancelEmpty);
+                    CustomTntSettings settings = new CustomTntSettings(matchType, traitMatchers, markerMatchers, override, onlyRegions, cancelEmpty);
                     if (matchType == null || "*".equals(matchType)) {
                         wildcard.add(settings);
                     } else {
@@ -250,6 +251,7 @@ public final class AddonSettings {
     public record CustomTntSettings(
             String matchType,
             Map<String, String> traitMatchers,
+            Map<String, String> markerMatchers,
             Integer damageOverride,
             boolean onlyRegionBlocks,
             boolean cancelWhenEmpty
@@ -261,7 +263,7 @@ public final class AddonSettings {
             return blockSettings.damagePerExplosion();
         }
 
-        public boolean matches(String typeId, Map<String, String> traits) {
+        public boolean matches(String typeId, Map<String, String> traits, MarkerValueProvider markerProvider) {
             if (matchType != null && typeId != null && !matchType.equalsIgnoreCase(typeId)) {
                 return false;
             }
@@ -269,13 +271,30 @@ public final class AddonSettings {
                 return false;
             }
             if (traitMatchers.isEmpty()) {
+                if (markerMatchers.isEmpty()) {
+                    return true;
+                }
+            } else {
+                if (traits == null || traits.isEmpty()) {
+                    return false;
+                }
+                for (Map.Entry<String, String> entry : traitMatchers.entrySet()) {
+                    String actual = traits.get(entry.getKey());
+                    if (actual == null) {
+                        return false;
+                    }
+                    if (!compareTrait(entry.getValue(), actual)) {
+                        return false;
+                    }
+                }
+            }
+
+            if (markerMatchers.isEmpty()) {
                 return true;
             }
-            if (traits == null || traits.isEmpty()) {
-                return false;
-            }
-            for (Map.Entry<String, String> entry : traitMatchers.entrySet()) {
-                String actual = traits.get(entry.getKey());
+
+            for (Map.Entry<String, String> entry : markerMatchers.entrySet()) {
+                String actual = markerProvider != null ? markerProvider.get(entry.getKey()) : null;
                 if (actual == null) {
                     return false;
                 }
@@ -284,6 +303,10 @@ public final class AddonSettings {
                 }
             }
             return true;
+        }
+
+        public boolean requiresMarkers() {
+            return !markerMatchers.isEmpty();
         }
 
         private boolean compareTrait(String expected, String actual) {
@@ -314,6 +337,11 @@ public final class AddonSettings {
         private boolean isBoolean(String value) {
             return "true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value);
         }
+
+        @FunctionalInterface
+        public interface MarkerValueProvider {
+            String get(String key);
+        }
     }
 
     private static Map<String, List<CustomTntSettings>> copySettings(Map<String, List<CustomTntSettings>> source) {
@@ -337,6 +365,21 @@ public final class AddonSettings {
             traits.put(key.toLowerCase(Locale.ROOT), value.toString());
         }
         return traits.isEmpty() ? Map.of() : Map.copyOf(traits);
+    }
+
+    private static Map<String, String> readMarkerMatchers(ConfigurationSection markersSection) {
+        if (markersSection == null) {
+            return Map.of();
+        }
+        Map<String, String> markers = new HashMap<>();
+        for (String key : markersSection.getKeys(false)) {
+            Object value = markersSection.get(key);
+            if (value == null) {
+                continue;
+            }
+            markers.put(key, value.toString());
+        }
+        return markers.isEmpty() ? Map.of() : Map.copyOf(markers);
     }
 
     private static String sanitizeKey(String raw) {

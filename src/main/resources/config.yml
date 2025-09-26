@@ -50,6 +50,8 @@ custom-tnt:
       traits:
         radius: 6
         drops: false
+      nbt-markers:
+        CustomTNTFlowMode: "marker_only"
       # Сколько урона наносит кастомный заряд. Если убрать или поставить 0 — возьмётся значение блока.
       damage-override: 1
       # true — оставляем только приватные блоки в списке затронутых.

@@ -8,7 +8,7 @@
 - Многострочные голограммы с плейсхолдерами `{lives}`, `{max}`, `{owner}`, координатами и HEX‑цветами.
 - Автоматическое удаление голограмм при разрушении привата и поддержка плагина DecentHolograms.
 - Защита от установки приватных блоков вплотную друг к другу и от разрушения визером.
-- Интеграция с кастомными TNT по NBT-тегам (`customtntflow:tnt_type` и JSON в `customtntflow:traits`):
+- Интеграция с кастомными TNT по NBT-тегам (`customtntflow:tnt_type`, `customtntflow:traits` и произвольные маркеры из `primed.nbt-markers`):
   настраивайте урон, фильтр блоков и условия отмены взрыва для каждого типа.
 - Настраиваемые сообщения об ошибках при попытке наложить приват.
 
@@ -53,6 +53,8 @@ custom-tnt:
       traits:
         radius: 6
         drops: false
+      nbt-markers:
+        CustomTNTFlowMode: "marker_only"
       damage-override: 1
       only-region-blocks: true
       cancel-when-empty: true
@@ -60,7 +62,8 @@ custom-tnt:
 
 - Раздел `default` определяет настройки по умолчанию для всех приватных блоков. Раздел `blocks` позволяет переопределить значения для конкретных материалов.
 - Если `tnt-only: true`, урон региону наносят только взрывы TNT. Любые другие взрывы игнорируются.
-- Блок `custom-tnt` описывает сопоставление по NBT: `type-key` и `traits-key` указывают, какие поля читать из PersistentDataContainer.
+- Блок `custom-tnt` описывает сопоставление по NBT: `type-key` и `traits-key` указывают, какие поля читать из PersistentDataContainer,
+  а `nbt-markers` — прямые NBT-поля (например, из `primed.nbt-markers`), которые нужно сопоставить.
   Для каждого типа можно задать урон (`damage-override`), фильтрацию затронутых блоков (`only-region-blocks`) и отмену взрыва,
   если регионов рядом нет (`cancel-when-empty`).
 - После изменения конфигурации перезапустите сервер, чтобы настройки применились.

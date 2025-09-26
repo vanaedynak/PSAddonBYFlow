@@ -1,6 +1,8 @@
 package dev.byflow.psaddon.tnt;
 
 import de.tr7zw.changeme.nbtapi.NBT;
+import de.tr7zw.changeme.nbtapi.NBTCompound;
+import de.tr7zw.changeme.nbtapi.NBTType;
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.config.AddonSettings;
 import org.bukkit.NamespacedKey;
@@ -8,6 +10,7 @@ import org.bukkit.entity.TNTPrimed;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,8 +62,10 @@ public final class CustomTntResolver {
             traits = parseTraits(rawTraits);
         }
 
+        MarkerValueCache markerCache = new MarkerValueCache(primed);
+
         for (AddonSettings.CustomTntSettings candidate : candidates) {
-            if (candidate.matches(typeId, traits)) {
+            if (candidate.matches(typeId, traits, markerCache)) {
                 return Optional.of(new Match(candidate, typeId, traits));
             }
         }
@@ -216,6 +221,85 @@ public final class CustomTntResolver {
             }
         }
         return -1;
+    }
+
+    private String readMarkerValue(TNTPrimed primed, String key) {
+        if (!nbtApiAvailable || key == null || key.isBlank()) {
+            return null;
+        }
+        try {
+            return NBT.get(primed, nbt -> readMarkerFromCompound(nbt, key));
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.FINEST, "Failed to read NBT marker " + key, throwable);
+            return null;
+        }
+    }
+
+    private String readMarkerFromCompound(NBTCompound compound, String key) {
+        if (compound == null || key == null || !compound.hasTag(key)) {
+            return null;
+        }
+        NBTType type;
+        try {
+            type = compound.getType(key);
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.FINEST, "Failed to obtain NBT type for marker " + key, throwable);
+            return null;
+        }
+        if (type == null) {
+            return safeGetString(compound, key);
+        }
+        try {
+            return switch (type) {
+                case NBTTagString -> safeGetString(compound, key);
+                case NBTTagInt -> Integer.toString(compound.getInteger(key));
+                case NBTTagShort -> Short.toString(compound.getShort(key));
+                case NBTTagLong -> Long.toString(compound.getLong(key));
+                case NBTTagFloat -> Float.toString(compound.getFloat(key));
+                case NBTTagDouble -> Double.toString(compound.getDouble(key));
+                case NBTTagByte -> {
+                    try {
+                        yield Boolean.toString(compound.getBoolean(key));
+                    } catch (Throwable ignored) {
+                        yield Byte.toString(compound.getByte(key));
+                    }
+                }
+                case NBTTagByteArray -> Arrays.toString(compound.getByteArray(key));
+                case NBTTagIntArray -> Arrays.toString(compound.getIntArray(key));
+                case NBTTagLongArray -> Arrays.toString(compound.getLongArray(key));
+                case NBTTagList, NBTTagCompound, NBTTagEnd -> null;
+            };
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.FINEST, "Failed to read NBT marker value " + key, throwable);
+            return null;
+        }
+    }
+
+    private String safeGetString(NBTCompound compound, String key) {
+        try {
+            String value = compound.getString(key);
+            return value != null ? value : null;
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.FINEST, "Failed to read string marker " + key, throwable);
+            return null;
+        }
+    }
+
+    private final class MarkerValueCache implements AddonSettings.CustomTntSettings.MarkerValueProvider {
+        private final TNTPrimed primed;
+        private final Map<String, String> cache = new HashMap<>();
+
+        private MarkerValueCache(TNTPrimed primed) {
+            this.primed = primed;
+        }
+
+        @Override
+        public String get(String key) {
+            if (key == null) {
+                return null;
+            }
+            return cache.computeIfAbsent(key, ignored -> readMarkerValue(primed, key));
+        }
     }
 
     private boolean isEscaped(String source, int index) {
