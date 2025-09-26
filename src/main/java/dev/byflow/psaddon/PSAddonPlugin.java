@@ -1,14 +1,13 @@
 package dev.byflow.psaddon;
 
-import dev.byflow.customtntflow.api.RegionTNTAPI;
 import dev.byflow.psaddon.config.AddonSettings;
+import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
-import dev.byflow.psaddon.listener.CustomTntBridgeListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
 import dev.byflow.psaddon.listener.WitherProtectionListener;
+import dev.byflow.psaddon.tnt.CustomTntResolver;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,7 +18,7 @@ public final class PSAddonPlugin extends JavaPlugin {
     private RegionHealthManager regionHealthManager;
     private HologramManager hologramManager;
     private AddonSettings addonSettings;
-    private RegionTNTAPI regionTntApi;
+    private CustomTntResolver customTntResolver;
 
     @Override
     public void onEnable() {
@@ -27,16 +26,6 @@ public final class PSAddonPlugin extends JavaPlugin {
             getLogger().severe("ProtectionStones plugin is not loaded. Disabling addon.");
             getServer().getPluginManager().disablePlugin(this);
             return;
-        }
-
-        if (getServer().getPluginManager().getPlugin("CustomTNTFlow") != null) {
-            try {
-                this.regionTntApi = RegionTNTAPI.get();
-            } catch (Throwable throwable) {
-                getLogger().warning("Failed to access CustomTNTFlow API: " + throwable.getMessage());
-            }
-        } else {
-            getLogger().warning("CustomTNTFlow plugin is not loaded. Custom TNT integration disabled.");
         }
 
         saveDefaultConfig();
@@ -85,22 +74,6 @@ public final class PSAddonPlugin extends JavaPlugin {
         return addonSettings;
     }
 
-    public RegionTNTAPI getRegionTntApi() {
-        return regionTntApi;
-    }
-
-    public boolean isCustomTnt(Entity entity) {
-        if (!(entity instanceof TNTPrimed primed) || regionTntApi == null) {
-            return false;
-        }
-        try {
-            return regionTntApi.isCustom(primed);
-        } catch (Throwable throwable) {
-            getLogger().warning("Failed to query CustomTNTFlow for TNT entity: " + throwable.getMessage());
-            return false;
-        }
-    }
-
     public int damageRegion(RegionHandle region, AddonSettings.BlockSettings settings, int amount) {
         int maxLives = settings.lives();
         int remaining = regionHealthManager.damageRegion(region, amount, maxLives);
@@ -125,10 +98,6 @@ public final class PSAddonPlugin extends JavaPlugin {
 
         ProtectionStonesEventBridge bridge = new ProtectionStonesEventBridge(this, protectionStonesHook);
         bridge.register(pluginManager);
-
-        if (regionTntApi != null && addonSettings.hasCustomTntIntegration()) {
-            pluginManager.registerEvents(new CustomTntBridgeListener(this), this);
-        }
     }
 
     private void reloadConfiguration() {
@@ -145,11 +114,29 @@ public final class PSAddonPlugin extends JavaPlugin {
         cfg.addDefault("prevent-stacking", true);
         cfg.addDefault("messages.stack-block-denied", "&cНельзя ставить приват вплотную к другому приватному блоку!");
         cfg.addDefault("custom-tnt.enabled", true);
+        cfg.addDefault("custom-tnt.type-key", "customtntflow:tnt_type");
+        cfg.addDefault("custom-tnt.traits-key", "customtntflow:traits");
+        cfg.addDefault("custom-tnt.types.region_breaker.type", "region_breaker");
+        cfg.addDefault("custom-tnt.types.region_breaker.traits.radius", 6);
         cfg.addDefault("custom-tnt.types.region_breaker.damage-override", 1);
         cfg.addDefault("custom-tnt.types.region_breaker.only-region-blocks", true);
         cfg.addDefault("custom-tnt.types.region_breaker.cancel-when-empty", true);
         cfg.options().copyDefaults(true);
         saveConfig();
         this.addonSettings = new AddonSettings(cfg);
+        this.customTntResolver = addonSettings.hasCustomTntIntegration()
+                ? new CustomTntResolver(this, addonSettings)
+                : null;
+    }
+
+    public CustomTntResolver getCustomTntResolver() {
+        return customTntResolver;
+    }
+
+    public CustomTntResolver.Match resolveCustomTnt(TNTPrimed primed) {
+        if (customTntResolver == null || primed == null) {
+            return null;
+        }
+        return customTntResolver.resolve(primed).orElse(null);
     }
 }

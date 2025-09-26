@@ -8,15 +8,14 @@
 - Многострочные голограммы с плейсхолдерами `{lives}`, `{max}`, `{owner}`, координатами и HEX‑цветами.
 - Автоматическое удаление голограмм при разрушении привата и поддержка плагина DecentHolograms.
 - Защита от установки приватных блоков вплотную друг к другу и от разрушения визером.
-- Интеграция с CustomTNTFlow через `RegionTNTAPI`: можно настроить отдельные типы кастомного TNT, которые наносят урон
-  только по приватным блокам.
+- Интеграция с кастомными TNT по NBT-тегам (`customtntflow:tnt_type` и JSON в `customtntflow:traits`):
+  настраивайте урон, фильтр блоков и условия отмены взрыва для каждого типа.
 - Настраиваемые сообщения об ошибках при попытке наложить приват.
 
 ## Сборка
 1. Установите JDK 21.
-2. Поместите `CustomTNTFlow-1.0.0.jar` в папку `libs` (или замените на актуальную версию — главное, чтобы путь совпадал в `build.gradle.kts`).
-3. Выполните `./gradlew build`. Готовый файл появится в `build/libs/PSAddonBYFlow-{version}.jar`.
-4. Скопируйте `PSAddonBYFlow`, оригинальные ProtectionStones и CustomTNTFlow на Paper 1.21.1 и перезапустите сервер.
+2. Выполните `./gradlew build`. Готовый файл появится в `build/libs/PSAddonBYFlow-{version}.jar`.
+3. Скопируйте `PSAddonBYFlow` и оригинальные ProtectionStones на Paper 1.21.1 и перезапустите сервер.
 
 ## Конфигурация `plugins/PSAddonBYFlow/config.yml`
 ```yaml
@@ -46,8 +45,14 @@ messages:
 
 custom-tnt:
   enabled: true
+  type-key: "customtntflow:tnt_type"
+  traits-key: "customtntflow:traits"
   types:
     region_breaker:
+      type: "region_breaker"
+      traits:
+        radius: 6
+        drops: false
       damage-override: 1
       only-region-blocks: true
       cancel-when-empty: true
@@ -55,8 +60,9 @@ custom-tnt:
 
 - Раздел `default` определяет настройки по умолчанию для всех приватных блоков. Раздел `blocks` позволяет переопределить значения для конкретных материалов.
 - Если `tnt-only: true`, урон региону наносят только взрывы TNT. Любые другие взрывы игнорируются.
-- Блок `custom-tnt` перечисляет идентификаторы кастомных зарядов из CustomTNTFlow. Для каждого можно задать урон (`damage-override`),
-  оставить только приватные блоки в списке (`only-region-blocks`) и отменять взрыв при отсутствии подходящих целей.
+- Блок `custom-tnt` описывает сопоставление по NBT: `type-key` и `traits-key` указывают, какие поля читать из PersistentDataContainer.
+  Для каждого типа можно задать урон (`damage-override`), фильтрацию затронутых блоков (`only-region-blocks`) и отмену взрыва,
+  если регионов рядом нет (`cancel-when-empty`).
 - После изменения конфигурации перезапустите сервер, чтобы настройки применились.
 
 ## Хранение данных

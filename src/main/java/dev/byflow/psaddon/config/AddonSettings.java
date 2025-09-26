@@ -19,7 +19,10 @@ public final class AddonSettings {
     private final Map<Material, BlockSettings> overrides;
     private final boolean preventStacking;
     private final boolean customTntEnabled;
-    private final Map<String, CustomTntSettings> customTntSettings;
+    private final String customTntTypeKey;
+    private final String customTntTraitsKey;
+    private final Map<String, List<CustomTntSettings>> customTntSettingsByType;
+    private final List<CustomTntSettings> customTntWildcard;
 
     public AddonSettings(FileConfiguration configuration) {
         ConfigurationSection defaultSection = configuration.getConfigurationSection("default");
@@ -49,9 +52,14 @@ public final class AddonSettings {
 
         ConfigurationSection customTntSection = configuration.getConfigurationSection("custom-tnt");
         boolean tntEnabled = false;
-        Map<String, CustomTntSettings> tntSettings = new HashMap<>();
+        String typeKey = null;
+        String traitsKey = null;
+        Map<String, List<CustomTntSettings>> byType = new HashMap<>();
+        List<CustomTntSettings> wildcard = new ArrayList<>();
         if (customTntSection != null) {
             tntEnabled = customTntSection.getBoolean("enabled", true);
+            typeKey = sanitizeKey(customTntSection.getString("type-key", "customtntflow:tnt_type"));
+            traitsKey = sanitizeKey(customTntSection.getString("traits-key", "customtntflow:traits"));
             ConfigurationSection typesSection = customTntSection.getConfigurationSection("types");
             if (typesSection != null) {
                 for (String key : typesSection.getKeys(false)) {
@@ -67,13 +75,24 @@ public final class AddonSettings {
                     }
                     boolean onlyRegions = typeSection.getBoolean("only-region-blocks", true);
                     boolean cancelEmpty = typeSection.getBoolean("cancel-when-empty", true);
-                    tntSettings.put(key.toLowerCase(Locale.ROOT),
-                            new CustomTntSettings(override, onlyRegions, cancelEmpty));
+                    String matchType = sanitizeKey(typeSection.getString("type", key));
+                    Map<String, String> traitMatchers = readTraitMatchers(typeSection.getConfigurationSection("traits"));
+
+                    CustomTntSettings settings = new CustomTntSettings(matchType, traitMatchers, override, onlyRegions, cancelEmpty);
+                    if (matchType == null || "*".equals(matchType)) {
+                        wildcard.add(settings);
+                    } else {
+                        String normalized = matchType.toLowerCase(Locale.ROOT);
+                        byType.computeIfAbsent(normalized, ignored -> new ArrayList<>()).add(settings);
+                    }
                 }
             }
         }
-        this.customTntEnabled = tntEnabled && !tntSettings.isEmpty();
-        this.customTntSettings = Map.copyOf(tntSettings);
+        this.customTntEnabled = tntEnabled && (!byType.isEmpty() || !wildcard.isEmpty());
+        this.customTntTypeKey = typeKey;
+        this.customTntTraitsKey = traitsKey;
+        this.customTntSettingsByType = copySettings(byType);
+        this.customTntWildcard = List.copyOf(wildcard);
     }
 
     public BlockSettings getDefaultSettings() {
@@ -99,11 +118,34 @@ public final class AddonSettings {
         return customTntEnabled;
     }
 
-    public Optional<CustomTntSettings> resolveCustomTnt(String typeId) {
-        if (!customTntEnabled || typeId == null) {
-            return Optional.empty();
+    public String getCustomTntTypeKey() {
+        return customTntTypeKey;
+    }
+
+    public String getCustomTntTraitsKey() {
+        return customTntTraitsKey;
+    }
+
+    public List<CustomTntSettings> findCustomTntSettings(String typeId) {
+        if (!customTntEnabled) {
+            return List.of();
         }
-        return Optional.ofNullable(customTntSettings.get(typeId.toLowerCase(Locale.ROOT)));
+        List<CustomTntSettings> direct = typeId != null
+                ? customTntSettingsByType.get(typeId.toLowerCase(Locale.ROOT))
+                : null;
+        if ((direct == null || direct.isEmpty()) && customTntWildcard.isEmpty()) {
+            return List.of();
+        }
+        if (direct == null || direct.isEmpty()) {
+            return customTntWildcard;
+        }
+        if (customTntWildcard.isEmpty()) {
+            return direct;
+        }
+        List<CustomTntSettings> result = new ArrayList<>(direct.size() + customTntWildcard.size());
+        result.addAll(direct);
+        result.addAll(customTntWildcard);
+        return List.copyOf(result);
     }
 
     public record BlockSettings(
@@ -206,6 +248,8 @@ public final class AddonSettings {
     }
 
     public record CustomTntSettings(
+            String matchType,
+            Map<String, String> traitMatchers,
             Integer damageOverride,
             boolean onlyRegionBlocks,
             boolean cancelWhenEmpty
@@ -216,5 +260,90 @@ public final class AddonSettings {
             }
             return blockSettings.damagePerExplosion();
         }
+
+        public boolean matches(String typeId, Map<String, String> traits) {
+            if (matchType != null && typeId != null && !matchType.equalsIgnoreCase(typeId)) {
+                return false;
+            }
+            if (matchType != null && typeId == null) {
+                return false;
+            }
+            if (traitMatchers.isEmpty()) {
+                return true;
+            }
+            if (traits == null || traits.isEmpty()) {
+                return false;
+            }
+            for (Map.Entry<String, String> entry : traitMatchers.entrySet()) {
+                String actual = traits.get(entry.getKey());
+                if (actual == null) {
+                    return false;
+                }
+                if (!compareTrait(entry.getValue(), actual)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private boolean compareTrait(String expected, String actual) {
+            if (expected == null) {
+                return actual == null;
+            }
+            if (actual == null) {
+                return false;
+            }
+            if (expected.equalsIgnoreCase(actual)) {
+                return true;
+            }
+            String trimmedExpected = expected.trim();
+            String trimmedActual = actual.trim();
+            if (isBoolean(trimmedExpected) || isBoolean(trimmedActual)) {
+                return Boolean.parseBoolean(trimmedExpected) == Boolean.parseBoolean(trimmedActual);
+            }
+            try {
+                double expectedNumber = Double.parseDouble(trimmedExpected);
+                double actualNumber = Double.parseDouble(trimmedActual);
+                return Double.compare(expectedNumber, actualNumber) == 0;
+            } catch (NumberFormatException ignored) {
+                // ignore
+            }
+            return trimmedExpected.equalsIgnoreCase(trimmedActual);
+        }
+
+        private boolean isBoolean(String value) {
+            return "true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value);
+        }
+    }
+
+    private static Map<String, List<CustomTntSettings>> copySettings(Map<String, List<CustomTntSettings>> source) {
+        Map<String, List<CustomTntSettings>> result = new HashMap<>();
+        for (Map.Entry<String, List<CustomTntSettings>> entry : source.entrySet()) {
+            result.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return Map.copyOf(result);
+    }
+
+    private static Map<String, String> readTraitMatchers(ConfigurationSection traitsSection) {
+        if (traitsSection == null) {
+            return Map.of();
+        }
+        Map<String, String> traits = new HashMap<>();
+        for (String key : traitsSection.getKeys(false)) {
+            Object value = traitsSection.get(key);
+            if (value == null) {
+                continue;
+            }
+            traits.put(key.toLowerCase(Locale.ROOT), value.toString());
+        }
+        return traits.isEmpty() ? Map.of() : Map.copyOf(traits);
+    }
+
+    private static String sanitizeKey(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

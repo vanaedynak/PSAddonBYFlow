@@ -1,7 +1,9 @@
 package dev.byflow.psaddon.listener;
 
 import dev.byflow.psaddon.PSAddonPlugin;
+import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.config.AddonSettings;
+import dev.byflow.psaddon.tnt.CustomTntResolver;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TNTPrimed;
@@ -10,6 +12,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public final class ExplosionListener implements Listener {
     private final PSAddonPlugin plugin;
 
@@ -17,18 +23,22 @@ public final class ExplosionListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityExplode(EntityExplodeEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
-
         Entity source = event.getEntity();
 
-        if (plugin.isCustomTnt(source)) {
-            return;
+        if (source instanceof TNTPrimed primed) {
+            CustomTntResolver.Match customMatch = plugin.resolveCustomTnt(primed);
+            if (customMatch != null) {
+                handleCustomTnt(event, customMatch);
+                return;
+            }
         }
 
+        handleStandardExplosion(event, source);
+    }
+
+    private void handleStandardExplosion(EntityExplodeEvent event, Entity source) {
         plugin.getProtectionStonesHook().findRegion(event.getLocation()).ifPresent(region -> {
             AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
             if (!isSourceAllowed(settings, source)) {
@@ -41,6 +51,44 @@ public final class ExplosionListener implements Listener {
                 protectBlock(event, region.getProtectBlock());
             }
         });
+    }
+
+    private void handleCustomTnt(EntityExplodeEvent event, CustomTntResolver.Match match) {
+        AddonSettings.CustomTntSettings customSettings = match.settings();
+        Map<RegionHandle, AddonSettings.BlockSettings> impacted = new LinkedHashMap<>();
+
+        Iterator<Block> iterator = event.blockList().iterator();
+        while (iterator.hasNext()) {
+            Block block = iterator.next();
+            plugin.getProtectionStonesHook().findRegion(block.getLocation()).ifPresentOrElse(region -> {
+                impacted.putIfAbsent(region, plugin.getAddonSettings().resolve(region.getProtectBlock()));
+            }, () -> {
+                if (customSettings.onlyRegionBlocks()) {
+                    iterator.remove();
+                }
+            });
+        }
+
+        plugin.getProtectionStonesHook().findRegion(event.getLocation())
+                .ifPresent(region -> impacted.putIfAbsent(region,
+                        plugin.getAddonSettings().resolve(region.getProtectBlock())));
+
+        if (impacted.isEmpty()) {
+            if (customSettings.cancelWhenEmpty()) {
+                event.setCancelled(true);
+            }
+            return;
+        }
+
+        for (Map.Entry<RegionHandle, AddonSettings.BlockSettings> entry : impacted.entrySet()) {
+            RegionHandle region = entry.getKey();
+            AddonSettings.BlockSettings blockSettings = entry.getValue();
+            int damage = customSettings.resolveDamage(blockSettings);
+            int remaining = plugin.damageRegion(region, blockSettings, damage);
+            if (remaining > 0) {
+                protectBlock(event, region.getProtectBlock());
+            }
+        }
     }
 
     private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source) {
