@@ -3,6 +3,7 @@ package dev.byflow.psaddon.tnt;
 import de.tr7zw.changeme.nbtapi.NBT;
 import de.tr7zw.changeme.nbtapi.NBTCompound;
 import de.tr7zw.changeme.nbtapi.NBTType;
+import de.tr7zw.changeme.nbtapi.iface.ReadableNBT;
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.config.AddonSettings;
 import org.bukkit.NamespacedKey;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.logging.Level;
 
 public final class CustomTntResolver {
@@ -115,7 +117,8 @@ public final class CustomTntResolver {
             return null;
         }
         try {
-            return NBT.get(primed, nbt -> nbt.getString(path));
+            Function<ReadableNBT, String> reader = nbt -> nbt.getString(path);
+            return NBT.get(primed, reader);
         } catch (Throwable throwable) {
             plugin.getLogger().log(Level.FINEST, "Failed to read NBT key " + path, throwable);
             return null;
