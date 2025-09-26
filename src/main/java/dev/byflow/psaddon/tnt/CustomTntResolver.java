@@ -117,7 +117,12 @@ public final class CustomTntResolver {
             return null;
         }
         try {
-            Function<ReadableNBT, String> reader = nbt -> nbt.getString(path);
+            Function<ReadableNBT, String> reader = new Function<>() {
+                @Override
+                public String apply(ReadableNBT nbt) {
+                    return nbt.getString(path);
+                }
+            };
             return NBT.get(primed, reader);
         } catch (Throwable throwable) {
             plugin.getLogger().log(Level.FINEST, "Failed to read NBT key " + path, throwable);
