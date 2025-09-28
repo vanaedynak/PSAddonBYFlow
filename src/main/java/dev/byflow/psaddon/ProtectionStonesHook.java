@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
@@ -31,6 +32,7 @@ public final class ProtectionStonesHook {
     private final Method getRegionsByIdMethod;
     private final Method getOwnerUuidMethod;
     private final Method getOwnerNameMethod;
+    private final Method getOwnersMethod;
     private final Method getWorldGuardRegionMethod;
     private final Map<Class<?>, Method> minimumPointCache = new ConcurrentHashMap<>();
     private final Map<Class<?>, Method> maximumPointCache = new ConcurrentHashMap<>();
@@ -46,6 +48,7 @@ public final class ProtectionStonesHook {
 
         this.getOwnerUuidMethod = resolveOwnerUuidMethod(psRegionClass);
         this.getOwnerNameMethod = resolveOwnerNameMethod(psRegionClass);
+        this.getOwnersMethod = resolveOwnersMethod(psRegionClass);
 
         this.psCreateEventClass = Class.forName("dev.espi.protectionstones.event.PSCreateEvent");
         this.psRemoveEventClass = Class.forName("dev.espi.protectionstones.event.PSRemoveEvent");
@@ -145,32 +148,30 @@ public final class ProtectionStonesHook {
     }
 
     public Optional<OwnerInfo> getOwnerInfo(Object region) {
-        UUID uuid = null;
-        String rawName = null;
+        OwnerDetails details = new OwnerDetails();
         if (getOwnerUuidMethod != null) {
             try {
                 Object value = getOwnerUuidMethod.invoke(region);
-                if (value instanceof UUID u) {
-                    uuid = u;
-                } else if (value instanceof String text && !text.isEmpty()) {
-                    try {
-                        uuid = UUID.fromString(text);
-                    } catch (IllegalArgumentException ignored) {
-                        rawName = text;
-                    }
-                }
+                details.accept(value);
             } catch (IllegalAccessException | InvocationTargetException ignored) {
             }
         }
         if (getOwnerNameMethod != null) {
             try {
                 Object value = getOwnerNameMethod.invoke(region);
-                if (value != null) {
-                    rawName = value.toString();
-                }
+                details.accept(value);
             } catch (IllegalAccessException | InvocationTargetException ignored) {
             }
         }
+        if (details.isEmpty() && getOwnersMethod != null) {
+            try {
+                Object value = getOwnersMethod.invoke(region);
+                details.accept(value);
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+            }
+        }
+        UUID uuid = details.uuid;
+        String rawName = details.rawName;
         if (uuid == null && rawName == null) {
             return Optional.empty();
         }
@@ -381,6 +382,136 @@ public final class ProtectionStonesHook {
             }
         }
         return null;
+    }
+
+    private Method resolveOwnersMethod(Class<?> regionClass) {
+        return findMethod(regionClass, "getOwners", "getOwnerUUIDs", "getOwnerIds", "getOwnersUUID");
+    }
+
+    private static final class OwnerDetails {
+        private UUID uuid;
+        private String rawName;
+
+        private void accept(Object value) {
+            if (value == null) {
+                return;
+            }
+            if (value instanceof Optional<?> optional) {
+                optional.ifPresent(this::accept);
+                return;
+            }
+            if (value instanceof Iterable<?> iterable) {
+                for (Object element : iterable) {
+                    accept(element);
+                    if (hasCompleteInfo()) {
+                        break;
+                    }
+                }
+                return;
+            }
+            if (value.getClass().isArray()) {
+                int length = java.lang.reflect.Array.getLength(value);
+                for (int i = 0; i < length; i++) {
+                    accept(java.lang.reflect.Array.get(value, i));
+                    if (hasCompleteInfo()) {
+                        break;
+                    }
+                }
+                return;
+            }
+            if (value instanceof UUID u) {
+                if (uuid == null) {
+                    uuid = u;
+                }
+                return;
+            }
+            if (value instanceof String text) {
+                if (text.isEmpty()) {
+                    return;
+                }
+                if (uuid == null) {
+                    try {
+                        uuid = UUID.fromString(text);
+                        return;
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                }
+                if (rawName == null) {
+                    rawName = text;
+                }
+                return;
+            }
+            if (value instanceof OfflinePlayer offlinePlayer) {
+                if (uuid == null) {
+                    uuid = offlinePlayer.getUniqueId();
+                }
+                if (rawName == null) {
+                    String name = offlinePlayer.getName();
+                    if (name != null && !name.isBlank()) {
+                        rawName = name;
+                    }
+                }
+                return;
+            }
+            UUID reflectedUuid = tryInvokeUuid(value);
+            if (uuid == null && reflectedUuid != null) {
+                uuid = reflectedUuid;
+            }
+            if (rawName == null) {
+                String name = tryInvokeName(value);
+                if (name != null && !name.isBlank()) {
+                    rawName = name;
+                    return;
+                }
+            }
+            if (rawName == null && uuid == null) {
+                rawName = value.toString();
+            }
+        }
+
+        private boolean isEmpty() {
+            return uuid == null && (rawName == null || rawName.isBlank());
+        }
+
+        private boolean hasCompleteInfo() {
+            return uuid != null && rawName != null && !rawName.isBlank();
+        }
+
+        private UUID tryInvokeUuid(Object value) {
+            for (String methodName : new String[]{"getUniqueId", "getUniqueID", "getUuid", "getUUID", "uniqueId", "uuid"}) {
+                try {
+                    Method method = value.getClass().getMethod(methodName);
+                    Object result = method.invoke(value);
+                    if (result instanceof UUID u) {
+                        return u;
+                    }
+                    if (result instanceof String text && !text.isEmpty()) {
+                        try {
+                            return UUID.fromString(text);
+                        } catch (IllegalArgumentException ignored) {
+                        }
+                    }
+                } catch (NoSuchMethodException ignored) {
+                } catch (IllegalAccessException | InvocationTargetException ignored) {
+                }
+            }
+            return null;
+        }
+
+        private String tryInvokeName(Object value) {
+            for (String methodName : new String[]{"getName", "name", "getPlayerName", "getOwnerName"}) {
+                try {
+                    Method method = value.getClass().getMethod(methodName);
+                    Object result = method.invoke(value);
+                    if (result instanceof String text && !text.isBlank()) {
+                        return text;
+                    }
+                } catch (NoSuchMethodException ignored) {
+                } catch (IllegalAccessException | InvocationTargetException ignored) {
+                }
+            }
+            return null;
+        }
     }
 
     public record OwnerInfo(UUID uuid, String rawName, String displayName) {
