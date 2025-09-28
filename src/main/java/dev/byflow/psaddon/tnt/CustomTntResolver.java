@@ -1,9 +1,5 @@
 package dev.byflow.psaddon.tnt;
 
-import de.tr7zw.changeme.nbtapi.NBT;
-import de.tr7zw.changeme.nbtapi.NBTCompound;
-import de.tr7zw.changeme.nbtapi.NBTType;
-import de.tr7zw.changeme.nbtapi.iface.ReadableNBT;
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.config.AddonSettings;
 import org.bukkit.NamespacedKey;
@@ -11,8 +7,10 @@ import org.bukkit.entity.TNTPrimed;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.util.Arrays;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -21,20 +19,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class CustomTntResolver {
     private final PSAddonPlugin plugin;
     private final AddonSettings settings;
     private final NamespacedKey typeKey;
     private final NamespacedKey traitsKey;
-    private final boolean nbtApiAvailable;
+    private final NbtApiBridge nbtApi;
 
     public CustomTntResolver(PSAddonPlugin plugin, AddonSettings settings) {
         this.plugin = plugin;
         this.settings = settings;
         this.typeKey = parseKey(settings.getCustomTntTypeKey());
         this.traitsKey = parseKey(settings.getCustomTntTraitsKey());
-        this.nbtApiAvailable = detectNbtApi();
+        this.nbtApi = NbtApiBridge.create(plugin);
     }
 
     public Optional<Match> resolve(TNTPrimed primed) {
@@ -74,15 +73,6 @@ public final class CustomTntResolver {
         return Optional.empty();
     }
 
-    private boolean detectNbtApi() {
-        try {
-            Class.forName("de.tr7zw.changeme.nbtapi.NBT");
-            return true;
-        } catch (ClassNotFoundException ignored) {
-            return false;
-        }
-    }
-
     private NamespacedKey parseKey(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -113,21 +103,10 @@ public final class CustomTntResolver {
     }
 
     private String readNbtString(TNTPrimed primed, String path) {
-        if (!nbtApiAvailable || path == null || path.isBlank()) {
+        if (nbtApi == null || path == null || path.isBlank()) {
             return null;
         }
-        try {
-            Function<ReadableNBT, String> reader = new Function<>() {
-                @Override
-                public String apply(ReadableNBT nbt) {
-                    return nbt.getString(path);
-                }
-            };
-            return NBT.get(primed, reader);
-        } catch (Throwable throwable) {
-            plugin.getLogger().log(Level.FINEST, "Failed to read NBT key " + path, throwable);
-            return null;
-        }
+        return nbtApi.readString(primed, path);
     }
 
     private Map<String, String> parseTraits(String raw) {
@@ -232,74 +211,10 @@ public final class CustomTntResolver {
     }
 
     private String readMarkerValue(TNTPrimed primed, String key) {
-        if (!nbtApiAvailable || key == null || key.isBlank()) {
+        if (nbtApi == null || key == null || key.isBlank()) {
             return null;
         }
-        try {
-            Function<ReadableNBT, String> reader = new Function<>() {
-                @Override
-                public String apply(ReadableNBT nbt) {
-                    if (nbt instanceof NBTCompound compound) {
-                        return readMarkerFromCompound(compound, key);
-                    }
-                    return null;
-                }
-            };
-            return NBT.get(primed, reader);
-        } catch (Throwable throwable) {
-            plugin.getLogger().log(Level.FINEST, "Failed to read NBT marker " + key, throwable);
-            return null;
-        }
-    }
-
-    private String readMarkerFromCompound(NBTCompound compound, String key) {
-        if (compound == null || key == null || !compound.hasTag(key)) {
-            return null;
-        }
-        NBTType type;
-        try {
-            type = compound.getType(key);
-        } catch (Throwable throwable) {
-            plugin.getLogger().log(Level.FINEST, "Failed to obtain NBT type for marker " + key, throwable);
-            return null;
-        }
-        if (type == null) {
-            return safeGetString(compound, key);
-        }
-        try {
-            return switch (type) {
-                case NBTTagString -> safeGetString(compound, key);
-                case NBTTagInt -> Integer.toString(compound.getInteger(key));
-                case NBTTagShort -> Short.toString(compound.getShort(key));
-                case NBTTagLong -> Long.toString(compound.getLong(key));
-                case NBTTagFloat -> Float.toString(compound.getFloat(key));
-                case NBTTagDouble -> Double.toString(compound.getDouble(key));
-                case NBTTagByte -> {
-                    try {
-                        yield Boolean.toString(compound.getBoolean(key));
-                    } catch (Throwable ignored) {
-                        yield Byte.toString(compound.getByte(key));
-                    }
-                }
-                case NBTTagByteArray -> Arrays.toString(compound.getByteArray(key));
-                case NBTTagIntArray -> Arrays.toString(compound.getIntArray(key));
-                case NBTTagLongArray -> Arrays.toString(compound.getLongArray(key));
-                case NBTTagList, NBTTagCompound, NBTTagEnd -> null;
-            };
-        } catch (Throwable throwable) {
-            plugin.getLogger().log(Level.FINEST, "Failed to read NBT marker value " + key, throwable);
-            return null;
-        }
-    }
-
-    private String safeGetString(NBTCompound compound, String key) {
-        try {
-            String value = compound.getString(key);
-            return value != null ? value : null;
-        } catch (Throwable throwable) {
-            plugin.getLogger().log(Level.FINEST, "Failed to read string marker " + key, throwable);
-            return null;
-        }
+        return nbtApi.readMarkerValue(primed, key);
     }
 
     private final class MarkerValueCache implements AddonSettings.CustomTntSettings.MarkerValueProvider {
@@ -345,5 +260,177 @@ public final class CustomTntResolver {
     }
 
     public record Match(AddonSettings.CustomTntSettings settings, String typeId, Map<String, String> traits) {
+    }
+
+    private static final class NbtApiBridge {
+        private final Logger logger;
+        private final Method nbtGetMethod;
+        private final Method readableGetStringMethod;
+        private final Class<?> compoundClass;
+        private final Method compoundHasTagMethod;
+        private final Method compoundGetTypeMethod;
+        private final Method compoundGetStringMethod;
+        private final Method compoundGetIntegerMethod;
+        private final Method compoundGetShortMethod;
+        private final Method compoundGetLongMethod;
+        private final Method compoundGetFloatMethod;
+        private final Method compoundGetDoubleMethod;
+        private final Method compoundGetByteMethod;
+        private final Method compoundGetBooleanMethod;
+        private final Method compoundGetByteArrayMethod;
+        private final Method compoundGetIntArrayMethod;
+        private final Method compoundGetLongArrayMethod;
+
+        private NbtApiBridge(Logger logger) throws ClassNotFoundException, NoSuchMethodException {
+            this.logger = logger;
+
+            Class<?> nbtClass = Class.forName("de.tr7zw.changeme.nbtapi.NBT");
+            Class<?> readableClass = Class.forName("de.tr7zw.changeme.nbtapi.iface.ReadableNBT");
+            this.compoundClass = Class.forName("de.tr7zw.changeme.nbtapi.NBTCompound");
+
+            this.nbtGetMethod = nbtClass.getMethod("get", org.bukkit.entity.Entity.class, Function.class);
+            this.readableGetStringMethod = readableClass.getMethod("getString", String.class);
+            this.compoundHasTagMethod = compoundClass.getMethod("hasTag", String.class);
+            this.compoundGetTypeMethod = compoundClass.getMethod("getType", String.class);
+            this.compoundGetStringMethod = compoundClass.getMethod("getString", String.class);
+            this.compoundGetIntegerMethod = compoundClass.getMethod("getInteger", String.class);
+            this.compoundGetShortMethod = compoundClass.getMethod("getShort", String.class);
+            this.compoundGetLongMethod = compoundClass.getMethod("getLong", String.class);
+            this.compoundGetFloatMethod = compoundClass.getMethod("getFloat", String.class);
+            this.compoundGetDoubleMethod = compoundClass.getMethod("getDouble", String.class);
+            this.compoundGetByteMethod = compoundClass.getMethod("getByte", String.class);
+            this.compoundGetBooleanMethod = findOptionalMethod(compoundClass, "getBoolean", String.class);
+            this.compoundGetByteArrayMethod = compoundClass.getMethod("getByteArray", String.class);
+            this.compoundGetIntArrayMethod = compoundClass.getMethod("getIntArray", String.class);
+            this.compoundGetLongArrayMethod = compoundClass.getMethod("getLongArray", String.class);
+        }
+
+        private static Method findOptionalMethod(Class<?> owner, String name, Class<?>... parameterTypes) {
+            try {
+                return owner.getMethod(name, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+                return null;
+            }
+        }
+
+        static NbtApiBridge create(PSAddonPlugin plugin) {
+            try {
+                return new NbtApiBridge(plugin.getLogger());
+            } catch (Throwable throwable) {
+                plugin.getLogger().log(Level.FINER, "NBT-API not present; skipping advanced custom TNT lookups.");
+                return null;
+            }
+        }
+
+        private String readString(TNTPrimed primed, String path) {
+            return call(primed, nbt -> invokeString(readableGetStringMethod, nbt, path));
+        }
+
+        private String readMarkerValue(TNTPrimed primed, String key) {
+            return call(primed, nbt -> compoundClass.isInstance(nbt) ? readMarkerFromCompound(nbt, key) : null);
+        }
+
+        private String call(TNTPrimed primed, Function<Object, String> extractor) {
+            try {
+                Function<Object, Object> function = new Function<>() {
+                    @Override
+                    public Object apply(Object argument) {
+                        try {
+                            return extractor.apply(argument);
+                        } catch (RuntimeException ex) {
+                            logger.log(Level.FINEST, "Failed to process NBT payload", ex);
+                            return null;
+                        }
+                    }
+                };
+                Object result = nbtGetMethod.invoke(null, primed, function);
+                return result instanceof String string ? string : (result != null ? result.toString() : null);
+            } catch (IllegalAccessException | InvocationTargetException ex) {
+                logger.log(Level.FINEST, "Failed to access NBT data", ex);
+                return null;
+            }
+        }
+
+        private String readMarkerFromCompound(Object compound, String key) {
+            if (compound == null || key == null || !hasTag(compound, key)) {
+                return null;
+            }
+            Object type = invoke(compoundGetTypeMethod, compound, key);
+            if (type == null) {
+                return safeGetString(compound, key);
+            }
+            String typeName = type instanceof Enum<?> enumType ? enumType.name() : type.toString();
+            return switch (typeName) {
+                case "NBTTagString" -> safeGetString(compound, key);
+                case "NBTTagInt" -> numberToString(invoke(compoundGetIntegerMethod, compound, key));
+                case "NBTTagShort" -> numberToString(invoke(compoundGetShortMethod, compound, key));
+                case "NBTTagLong" -> numberToString(invoke(compoundGetLongMethod, compound, key));
+                case "NBTTagFloat" -> numberToString(invoke(compoundGetFloatMethod, compound, key));
+                case "NBTTagDouble" -> numberToString(invoke(compoundGetDoubleMethod, compound, key));
+                case "NBTTagByte" -> readByte(compound, key);
+                case "NBTTagByteArray" -> arrayToString(invoke(compoundGetByteArrayMethod, compound, key));
+                case "NBTTagIntArray" -> arrayToString(invoke(compoundGetIntArrayMethod, compound, key));
+                case "NBTTagLongArray" -> arrayToString(invoke(compoundGetLongArrayMethod, compound, key));
+                default -> null;
+            };
+        }
+
+        private boolean hasTag(Object compound, String key) {
+            Object result = invoke(compoundHasTagMethod, compound, key);
+            return result instanceof Boolean bool && bool;
+        }
+
+        private String readByte(Object compound, String key) {
+            if (compoundGetBooleanMethod != null) {
+                Object bool = invoke(compoundGetBooleanMethod, compound, key);
+                if (bool instanceof Boolean) {
+                    return Boolean.toString((Boolean) bool);
+                }
+            }
+            Object value = invoke(compoundGetByteMethod, compound, key);
+            if (value instanceof Byte byteValue) {
+                return Byte.toString(byteValue);
+            }
+            return null;
+        }
+
+        private String safeGetString(Object compound, String key) {
+            Object value = invoke(compoundGetStringMethod, compound, key);
+            return value != null ? value.toString() : null;
+        }
+
+        private String numberToString(Object value) {
+            return value instanceof Number number ? number.toString() : null;
+        }
+
+        private String arrayToString(Object value) {
+            if (value instanceof byte[] bytes) {
+                return Arrays.toString(bytes);
+            }
+            if (value instanceof int[] ints) {
+                return Arrays.toString(ints);
+            }
+            if (value instanceof long[] longs) {
+                return Arrays.toString(longs);
+            }
+            return null;
+        }
+
+        private String invokeString(Method method, Object target, String argument) {
+            Object value = invoke(method, target, argument);
+            return value != null ? value.toString() : null;
+        }
+
+        private Object invoke(Method method, Object target, String argument) {
+            if (method == null) {
+                return null;
+            }
+            try {
+                return method.invoke(target, argument);
+            } catch (IllegalAccessException | InvocationTargetException ex) {
+                logger.log(Level.FINEST, "Failed to invoke NBT method " + method.getName(), ex);
+                return null;
+            }
+        }
     }
 }
