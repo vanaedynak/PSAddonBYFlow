@@ -170,6 +170,9 @@ public final class ProtectionStonesHook {
             } catch (IllegalAccessException | InvocationTargetException ignored) {
             }
         }
+        if (details.isEmpty()) {
+            populateOwnersFromWorldGuard(region, details);
+        }
         UUID uuid = details.uuid;
         String rawName = details.rawName;
         if (uuid == null && rawName == null) {
@@ -181,6 +184,49 @@ public final class ProtectionStonesHook {
                     .orElse(uuid.toString());
         }
         return Optional.of(new OwnerInfo(uuid, rawName, displayName));
+    }
+
+    private void populateOwnersFromWorldGuard(Object region, OwnerDetails details) {
+        if (getWorldGuardRegionMethod == null) {
+            return;
+        }
+        try {
+            Object wgRegion = getWorldGuardRegionMethod.invoke(region);
+            if (wgRegion == null) {
+                return;
+            }
+            Method ownersAccessor = findMethod(wgRegion.getClass(), "getOwners", "owners");
+            if (ownersAccessor == null) {
+                return;
+            }
+            Object ownersDomain = ownersAccessor.invoke(wgRegion);
+            if (ownersDomain == null) {
+                return;
+            }
+            Method uniqueIdsAccessor = findMethod(ownersDomain.getClass(),
+                    "getUniqueIds", "getUniqueId", "uniqueIds");
+            if (uniqueIdsAccessor != null) {
+                try {
+                    Object uniqueIds = uniqueIdsAccessor.invoke(ownersDomain);
+                    details.accept(uniqueIds);
+                } catch (IllegalAccessException | InvocationTargetException ignored) {
+                }
+            }
+            if (!details.isEmpty()) {
+                return;
+            }
+            Method playerNamesAccessor = findMethod(ownersDomain.getClass(),
+                    "getPlayers", "getPlayerNames", "getNames", "players");
+            if (playerNamesAccessor != null) {
+                try {
+                    Object players = playerNamesAccessor.invoke(ownersDomain);
+                    details.accept(players);
+                } catch (IllegalAccessException | InvocationTargetException ignored) {
+                }
+            }
+        } catch (IllegalAccessException | InvocationTargetException ex) {
+            Bukkit.getLogger().warning("Failed to resolve WorldGuard owners: " + ex.getMessage());
+        }
     }
 
     public Optional<RegionBounds> getRegionBounds(Object region) {

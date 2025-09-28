@@ -16,7 +16,6 @@ tasks.wrapper {
 }
 
 val paperApiVersion = "1.21.1-R0.1-SNAPSHOT"
-val protectionStonesVersion = "v2.10.5"
 val nbtApiVersion = "2.12.3"
 
 java {
@@ -44,7 +43,6 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:$paperApiVersion")
-    compileOnly("com.github.EspiDev:ProtectionStones:$protectionStonesVersion")
     compileOnly("de.tr7zw:item-nbt-api-plugin:$nbtApiVersion")
 }
 
