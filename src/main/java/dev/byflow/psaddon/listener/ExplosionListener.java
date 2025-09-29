@@ -33,15 +33,18 @@ public final class ExplosionListener implements Listener {
                 handleCustomTnt(event, customMatch);
                 return;
             }
+
+            handleStandardExplosion(event, source, true);
+            return;
         }
 
-        handleStandardExplosion(event, source);
+        handleStandardExplosion(event, source, false);
     }
 
-    private void handleStandardExplosion(EntityExplodeEvent event, Entity source) {
+    private void handleStandardExplosion(EntityExplodeEvent event, Entity source, boolean primedTntWithoutMatch) {
         plugin.getProtectionStonesHook().findRegion(event.getLocation()).ifPresent(region -> {
             AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
-            if (!isSourceAllowed(settings, source)) {
+            if (!isSourceAllowed(settings, source, primedTntWithoutMatch)) {
                 protectBlock(event, region.getProtectBlock());
                 return;
             }
@@ -91,9 +94,13 @@ public final class ExplosionListener implements Listener {
         }
     }
 
-    private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source) {
+    private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source,
+                                    boolean primedTntWithoutMatch) {
         if (!settings.tntOnly()) {
             return true;
+        }
+        if (primedTntWithoutMatch) {
+            return false;
         }
         return source instanceof TNTPrimed;
     }
