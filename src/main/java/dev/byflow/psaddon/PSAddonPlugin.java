@@ -1,24 +1,30 @@
 package dev.byflow.psaddon;
 
+import dev.byflow.psaddon.command.RegionBombCommand;
 import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
+import dev.byflow.psaddon.listener.RegionBombListener;
 import dev.byflow.psaddon.listener.WitherProtectionListener;
 import dev.byflow.psaddon.tnt.CustomTntResolver;
+import dev.byflow.psaddon.tnt.RegionBombManager;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+
 public final class PSAddonPlugin extends JavaPlugin {
     private ProtectionStonesHook protectionStonesHook;
     private RegionHealthManager regionHealthManager;
     private HologramManager hologramManager;
     private AddonSettings addonSettings;
     private CustomTntResolver customTntResolver;
+    private RegionBombManager regionBombManager;
 
     @Override
     public void onEnable() {
@@ -45,7 +51,11 @@ public final class PSAddonPlugin extends JavaPlugin {
         this.hologramManager = new HologramManager(this);
         this.hologramManager.restoreAll(regionHealthManager, protectionStonesHook);
 
+        this.regionBombManager = new RegionBombManager(this);
+        this.regionBombManager.reload(addonSettings);
+
         registerListeners();
+        registerCommands();
     }
 
     @Override
@@ -95,9 +105,19 @@ public final class PSAddonPlugin extends JavaPlugin {
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new ExplosionListener(this), this);
         pluginManager.registerEvents(new WitherProtectionListener(this), this);
+        pluginManager.registerEvents(new RegionBombListener(this), this);
 
         ProtectionStonesEventBridge bridge = new ProtectionStonesEventBridge(this, protectionStonesHook);
         bridge.register(pluginManager);
+    }
+
+    private void registerCommands() {
+        PluginCommand pluginCommand = getCommand("psaddonbomb");
+        if (pluginCommand != null) {
+            RegionBombCommand command = new RegionBombCommand(this);
+            pluginCommand.setExecutor(command);
+            pluginCommand.setTabCompleter(command);
+        }
     }
 
     private void reloadConfiguration() {
@@ -121,12 +141,23 @@ public final class PSAddonPlugin extends JavaPlugin {
         cfg.addDefault("custom-tnt.types.region_breaker.damage-override", 1);
         cfg.addDefault("custom-tnt.types.region_breaker.only-region-blocks", true);
         cfg.addDefault("custom-tnt.types.region_breaker.cancel-when-empty", true);
+        cfg.addDefault("region-bomb.enabled", true);
+        cfg.addDefault("region-bomb.radius", 6.0);
+        cfg.addDefault("region-bomb.damage", 1);
+        cfg.addDefault("region-bomb.fuse-ticks", 60);
+        cfg.addDefault("region-bomb.display-name", "&cРегионный динамит");
+        cfg.addDefault("region-bomb.lore", List.of(
+                "&7Особый заряд, повреждающий только приваты.",
+                "&7Не разрушает блоки."));
         cfg.options().copyDefaults(true);
         saveConfig();
         this.addonSettings = new AddonSettings(cfg);
         this.customTntResolver = addonSettings.hasCustomTntIntegration()
                 ? new CustomTntResolver(this, addonSettings)
                 : null;
+        if (regionBombManager != null) {
+            regionBombManager.reload(addonSettings);
+        }
     }
 
     public CustomTntResolver getCustomTntResolver() {
@@ -138,5 +169,9 @@ public final class PSAddonPlugin extends JavaPlugin {
             return null;
         }
         return customTntResolver.resolve(primed).orElse(null);
+    }
+
+    public RegionBombManager getRegionBombManager() {
+        return regionBombManager;
     }
 }

@@ -23,6 +23,7 @@ public final class AddonSettings {
     private final String customTntTraitsKey;
     private final Map<String, List<CustomTntSettings>> customTntSettingsByType;
     private final List<CustomTntSettings> customTntWildcard;
+    private final RegionBombSettings regionBombSettings;
 
     public AddonSettings(FileConfiguration configuration) {
         ConfigurationSection defaultSection = configuration.getConfigurationSection("default");
@@ -94,6 +95,19 @@ public final class AddonSettings {
         this.customTntTraitsKey = traitsKey;
         this.customTntSettingsByType = copySettings(byType);
         this.customTntWildcard = List.copyOf(wildcard);
+
+        ConfigurationSection regionBombSection = configuration.getConfigurationSection("region-bomb");
+        if (regionBombSection == null) {
+            this.regionBombSettings = RegionBombSettings.disabled();
+        } else {
+            boolean enabled = regionBombSection.getBoolean("enabled", false);
+            double radius = Math.max(0D, regionBombSection.getDouble("radius", 6D));
+            int fuseTicks = Math.max(0, regionBombSection.getInt("fuse-ticks", 60));
+            int damage = Math.max(1, regionBombSection.getInt("damage", 1));
+            String displayName = regionBombSection.getString("display-name", "&cРегионный динамит");
+            List<String> lore = readLore(regionBombSection.get("lore"));
+            this.regionBombSettings = new RegionBombSettings(enabled, radius, fuseTicks, damage, displayName, lore);
+        }
     }
 
     public BlockSettings getDefaultSettings() {
@@ -147,6 +161,10 @@ public final class AddonSettings {
         result.addAll(direct);
         result.addAll(customTntWildcard);
         return List.copyOf(result);
+    }
+
+    public RegionBombSettings getRegionBombSettings() {
+        return regionBombSettings;
     }
 
     public record BlockSettings(
@@ -388,5 +406,46 @@ public final class AddonSettings {
         }
         String trimmed = raw.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static List<String> readLore(Object rawLore) {
+        if (rawLore instanceof List<?> rawList) {
+            List<String> lore = new ArrayList<>();
+            for (Object entry : rawList) {
+                if (entry != null) {
+                    lore.add(entry.toString().replace("\r", ""));
+                }
+            }
+            return lore.isEmpty() ? List.of() : List.copyOf(lore);
+        }
+        if (rawLore instanceof String text) {
+            String prepared = text.replace("\\n", "\n");
+            String[] split = prepared.split("\n");
+            List<String> lore = new ArrayList<>(split.length);
+            Collections.addAll(lore, split);
+            return lore.isEmpty() ? List.of() : List.copyOf(lore);
+        }
+        return List.of();
+    }
+
+    public record RegionBombSettings(
+            boolean enabled,
+            double radius,
+            int fuseTicks,
+            int damage,
+            String displayName,
+            List<String> lore
+    ) {
+        public RegionBombSettings {
+            radius = Math.max(0D, radius);
+            fuseTicks = Math.max(0, fuseTicks);
+            damage = Math.max(1, damage);
+            displayName = displayName == null ? "" : displayName;
+            lore = lore == null ? List.of() : List.copyOf(lore);
+        }
+
+        public static RegionBombSettings disabled() {
+            return new RegionBombSettings(false, 0D, 60, 1, "", List.of());
+        }
     }
 }

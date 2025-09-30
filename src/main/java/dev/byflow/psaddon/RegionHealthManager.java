@@ -10,7 +10,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -199,6 +201,36 @@ public final class RegionHealthManager {
 
     public Optional<String> getRegionKeyByBlock(String blockKey) {
         return Optional.ofNullable(blockIndex.get(blockKey));
+    }
+
+    public List<RegionHandle> findRegionsWithinRadius(Location center, double radius) {
+        if (center == null || center.getWorld() == null) {
+            return List.of();
+        }
+        double maxDistanceSquared = Math.max(0D, radius) * Math.max(0D, radius);
+        List<RegionHandle> result = new ArrayList<>();
+        regionRecords.forEach((key, record) -> {
+            Optional<RegionHandle> handleOptional = hook.findRegionByKey(key);
+            if (handleOptional.isEmpty()) {
+                return;
+            }
+            RegionHandle handle = handleOptional.get();
+            Block block = handle.getProtectBlock();
+            if (block == null || block.getWorld() == null) {
+                return;
+            }
+            if (!Objects.equals(block.getWorld(), center.getWorld())) {
+                return;
+            }
+            double dx = (block.getX() + 0.5) - center.getX();
+            double dy = (block.getY() + 0.5) - center.getY();
+            double dz = (block.getZ() + 0.5) - center.getZ();
+            double distanceSquared = dx * dx + dy * dy + dz * dz;
+            if (distanceSquared <= maxDistanceSquared) {
+                result.add(handle);
+            }
+        });
+        return result.isEmpty() ? List.of() : List.copyOf(result);
     }
 
     private String findAdjacentConflict(Block block, String storageKey) {

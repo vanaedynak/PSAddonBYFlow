@@ -58,3 +58,14 @@ custom-tnt:
       only-region-blocks: true
       # true — если подходящих блоков нет, взрыв отменяется.
       cancel-when-empty: true
+
+# Встроенный специальный динамит, наносящий урон только приватам.
+region-bomb:
+  enabled: true
+  radius: 6.0
+  damage: 1
+  fuse-ticks: 60
+  display-name: "&cРегионный динамит"
+  lore:
+    - "&7Особый заряд, повреждающий только приваты."
+    - "&7Не разрушает блоки."
