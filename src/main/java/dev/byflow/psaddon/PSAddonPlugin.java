@@ -8,11 +8,9 @@ import dev.byflow.psaddon.listener.ExplosionListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
 import dev.byflow.psaddon.listener.RegionBombListener;
 import dev.byflow.psaddon.listener.WitherProtectionListener;
-import dev.byflow.psaddon.tnt.CustomTntResolver;
 import dev.byflow.psaddon.tnt.RegionBombManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.TNTPrimed;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -23,7 +21,6 @@ public final class PSAddonPlugin extends JavaPlugin {
     private RegionHealthManager regionHealthManager;
     private HologramManager hologramManager;
     private AddonSettings addonSettings;
-    private CustomTntResolver customTntResolver;
     private RegionBombManager regionBombManager;
 
     @Override
@@ -133,14 +130,6 @@ public final class PSAddonPlugin extends JavaPlugin {
         ));
         cfg.addDefault("prevent-stacking", true);
         cfg.addDefault("messages.stack-block-denied", "&cНельзя ставить приват вплотную к другому приватному блоку!");
-        cfg.addDefault("custom-tnt.enabled", true);
-        cfg.addDefault("custom-tnt.type-key", "customtntflow:tnt_type");
-        cfg.addDefault("custom-tnt.traits-key", "customtntflow:traits");
-        cfg.addDefault("custom-tnt.types.region_breaker.type", "region_breaker");
-        cfg.addDefault("custom-tnt.types.region_breaker.traits.radius", 6);
-        cfg.addDefault("custom-tnt.types.region_breaker.damage-override", 1);
-        cfg.addDefault("custom-tnt.types.region_breaker.only-region-blocks", true);
-        cfg.addDefault("custom-tnt.types.region_breaker.cancel-when-empty", true);
         cfg.addDefault("region-bomb.enabled", true);
         cfg.addDefault("region-bomb.radius", 6.0);
         cfg.addDefault("region-bomb.damage", 1);
@@ -152,23 +141,9 @@ public final class PSAddonPlugin extends JavaPlugin {
         cfg.options().copyDefaults(true);
         saveConfig();
         this.addonSettings = new AddonSettings(cfg);
-        this.customTntResolver = addonSettings.hasCustomTntIntegration()
-                ? new CustomTntResolver(this, addonSettings)
-                : null;
         if (regionBombManager != null) {
             regionBombManager.reload(addonSettings);
         }
-    }
-
-    public CustomTntResolver getCustomTntResolver() {
-        return customTntResolver;
-    }
-
-    public CustomTntResolver.Match resolveCustomTnt(TNTPrimed primed) {
-        if (customTntResolver == null || primed == null) {
-            return null;
-        }
-        return customTntResolver.resolve(primed).orElse(null);
     }
 
     public RegionBombManager getRegionBombManager() {

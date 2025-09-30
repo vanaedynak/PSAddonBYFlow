@@ -5,11 +5,10 @@ author: BYFlow
 api-version: '1.20'
 depend:
   - ProtectionStones
-  - CustomTNTFlow
 commands:
   psaddonbomb:
     description: Выдать региональный динамит, наносящий урон только привату.
-    usage: /<command> [игрок] [количество]
+    usage: /<command> <игрок> [количество]
     permission: psaddon.regionbomb
 permissions:
   psaddon.regionbomb:

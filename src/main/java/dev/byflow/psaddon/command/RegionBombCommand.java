@@ -32,32 +32,34 @@ public final class RegionBombCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (!sender.hasPermission("psaddon.regionbomb")) {
+        if (sender instanceof Player player) {
+            if (!player.isOp() && !player.hasPermission("psaddon.regionbomb")) {
+                sender.sendMessage(ChatColor.RED + "У вас нет прав для выполнения этой команды.");
+                return true;
+            }
+        } else if (!sender.hasPermission("psaddon.regionbomb")) {
             sender.sendMessage(ChatColor.RED + "У вас нет прав для выполнения этой команды.");
             return true;
         }
 
-        Player target;
+        if (args.length < 1) {
+            sender.sendMessage(ChatColor.RED + "Использование: /" + label + " <ник> [количество]");
+            return true;
+        }
+
+        Player target = Bukkit.getPlayerExact(args[0]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Игрок не найден: " + args[0]);
+            return true;
+        }
+
         int amount = 1;
-        if (args.length == 0) {
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage(ChatColor.RED + "Использование: /" + label + " <ник> [количество]");
+        if (args.length > 1) {
+            try {
+                amount = Math.max(1, Integer.parseInt(args[1]));
+            } catch (NumberFormatException ex) {
+                sender.sendMessage(ChatColor.RED + "Количество должно быть числом.");
                 return true;
-            }
-            target = player;
-        } else {
-            target = Bukkit.getPlayerExact(args[0]);
-            if (target == null) {
-                sender.sendMessage(ChatColor.RED + "Игрок не найден: " + args[0]);
-                return true;
-            }
-            if (args.length > 1) {
-                try {
-                    amount = Math.max(1, Integer.parseInt(args[1]));
-                } catch (NumberFormatException ex) {
-                    sender.sendMessage(ChatColor.RED + "Количество должно быть числом.");
-                    return true;
-                }
             }
         }
 
