@@ -3,7 +3,7 @@ package dev.byflow.psaddon.listener;
 import dev.byflow.psaddon.PSAddonPlugin;
 import dev.byflow.psaddon.RegionHandle;
 import dev.byflow.psaddon.config.AddonSettings;
-import dev.byflow.psaddon.tnt.CustomTntResolver;
+import dev.byflow.psaddon.tnt.RegionBombManager;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TNTPrimed;
@@ -12,9 +12,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class ExplosionListener implements Listener {
     private final PSAddonPlugin plugin;
@@ -28,14 +27,47 @@ public final class ExplosionListener implements Listener {
         Entity source = event.getEntity();
 
         if (source instanceof TNTPrimed primed) {
-            CustomTntResolver.Match customMatch = plugin.resolveCustomTnt(primed);
-            if (customMatch != null) {
-                handleCustomTnt(event, customMatch);
+            RegionBombManager bombManager = plugin.getRegionBombManager();
+            if (bombManager != null && bombManager.isEnabled() && bombManager.isRegionBomb(primed)) {
+                handleRegionBomb(event, bombManager);
                 return;
             }
+
+            handleStandardExplosion(event, source);
+            return;
         }
 
         handleStandardExplosion(event, source);
+    }
+
+    private void handleRegionBomb(EntityExplodeEvent event, RegionBombManager manager) {
+        event.blockList().clear();
+        event.setYield(0F);
+
+        double radius = manager.getRadius();
+        if (radius <= 0) {
+            return;
+        }
+
+        List<RegionHandle> impacted = new ArrayList<>(plugin.getRegionHealthManager()
+                .findRegionsWithinRadius(event.getLocation(), radius));
+        plugin.getProtectionStonesHook().findRegion(event.getLocation()).ifPresent(region -> {
+            if (!impacted.contains(region)) {
+                impacted.add(region);
+            }
+        });
+        if (impacted.isEmpty()) {
+            return;
+        }
+
+        for (RegionHandle region : impacted) {
+            AddonSettings.BlockSettings blockSettings = plugin.getAddonSettings().resolve(region.getProtectBlock());
+            int damage = manager.getDamage();
+            int remaining = plugin.damageRegion(region, blockSettings, damage);
+            if (remaining > 0) {
+                protectBlock(event, region.getProtectBlock());
+            }
+        }
     }
 
     private void handleStandardExplosion(EntityExplodeEvent event, Entity source) {
@@ -51,44 +83,6 @@ public final class ExplosionListener implements Listener {
                 protectBlock(event, region.getProtectBlock());
             }
         });
-    }
-
-    private void handleCustomTnt(EntityExplodeEvent event, CustomTntResolver.Match match) {
-        AddonSettings.CustomTntSettings customSettings = match.settings();
-        Map<RegionHandle, AddonSettings.BlockSettings> impacted = new LinkedHashMap<>();
-
-        Iterator<Block> iterator = event.blockList().iterator();
-        while (iterator.hasNext()) {
-            Block block = iterator.next();
-            plugin.getProtectionStonesHook().findRegion(block.getLocation()).ifPresentOrElse(region -> {
-                impacted.putIfAbsent(region, plugin.getAddonSettings().resolve(region.getProtectBlock()));
-            }, () -> {
-                if (customSettings.onlyRegionBlocks()) {
-                    iterator.remove();
-                }
-            });
-        }
-
-        plugin.getProtectionStonesHook().findRegion(event.getLocation())
-                .ifPresent(region -> impacted.putIfAbsent(region,
-                        plugin.getAddonSettings().resolve(region.getProtectBlock())));
-
-        if (impacted.isEmpty()) {
-            if (customSettings.cancelWhenEmpty()) {
-                event.setCancelled(true);
-            }
-            return;
-        }
-
-        for (Map.Entry<RegionHandle, AddonSettings.BlockSettings> entry : impacted.entrySet()) {
-            RegionHandle region = entry.getKey();
-            AddonSettings.BlockSettings blockSettings = entry.getValue();
-            int damage = customSettings.resolveDamage(blockSettings);
-            int remaining = plugin.damageRegion(region, blockSettings, damage);
-            if (remaining > 0) {
-                protectBlock(event, region.getProtectBlock());
-            }
-        }
     }
 
     private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source) {

@@ -33,28 +33,13 @@ prevent-stacking: true
 messages:
   stack-block-denied: "&cНельзя ставить приват вплотную к другому приватному блоку!"
 
-# Настройки интеграции с кастомными TNT, определяемыми через NBT/PersistentDataContainer.
-custom-tnt:
-  # Можно отключить интеграцию, если требуется поддержка только ванильного TNT.
+# Встроенный специальный динамит, наносящий урон только приватам.
+region-bomb:
   enabled: true
-  # Ключ с типом TNT (по умолчанию CustomTNTFlow кладёт customtntflow:tnt_type).
-  type-key: "customtntflow:tnt_type"
-  # Ключ с JSON описанием свойств (customtntflow:traits). Можно отключить, оставив пустым.
-  traits-key: "customtntflow:traits"
-  types:
-    # Произвольный идентификатор секции.
-    region_breaker:
-      # Значение в type-key, которое нужно сопоставить. Если не указано — используется имя секции.
-      type: "region_breaker"
-      # Проверяем отдельные поля из traits (JSON). Значения сравниваются без учёта регистра.
-      traits:
-        radius: 6
-        drops: false
-      nbt-markers:
-        CustomTNTFlowMode: "marker_only"
-      # Сколько урона наносит кастомный заряд. Если убрать или поставить 0 — возьмётся значение блока.
-      damage-override: 1
-      # true — оставляем только приватные блоки в списке затронутых.
-      only-region-blocks: true
-      # true — если подходящих блоков нет, взрыв отменяется.
-      cancel-when-empty: true
+  radius: 6.0
+  damage: 1
+  fuse-ticks: 60
+  display-name: "&cРегионный динамит"
+  lore:
+    - "&7Особый заряд, повреждающий только приваты."
+    - "&7Не разрушает блоки."
