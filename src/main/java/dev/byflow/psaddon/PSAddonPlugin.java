@@ -1,24 +1,30 @@
 package dev.byflow.psaddon;
 
-import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.RegionHandle;
+import dev.byflow.psaddon.config.AddonSettings;
 import dev.byflow.psaddon.hologram.HologramManager;
 import dev.byflow.psaddon.listener.ExplosionListener;
 import dev.byflow.psaddon.listener.ProtectionStonesEventBridge;
 import dev.byflow.psaddon.listener.WitherProtectionListener;
-import dev.byflow.psaddon.tnt.CustomTntResolver;
+import dev.byflow.psaddon.tnt.RegionTntManager;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.Map;
 public final class PSAddonPlugin extends JavaPlugin {
     private ProtectionStonesHook protectionStonesHook;
     private RegionHealthManager regionHealthManager;
     private HologramManager hologramManager;
     private AddonSettings addonSettings;
-    private CustomTntResolver customTntResolver;
+    private RegionTntManager regionTntManager;
 
     @Override
     public void onEnable() {
@@ -44,6 +50,8 @@ public final class PSAddonPlugin extends JavaPlugin {
 
         this.hologramManager = new HologramManager(this);
         this.hologramManager.restoreAll(regionHealthManager, protectionStonesHook);
+
+        this.regionTntManager = new RegionTntManager(this);
 
         registerListeners();
     }
@@ -93,6 +101,7 @@ public final class PSAddonPlugin extends JavaPlugin {
 
     private void registerListeners() {
         PluginManager pluginManager = getServer().getPluginManager();
+        pluginManager.registerEvents(regionTntManager, this);
         pluginManager.registerEvents(new ExplosionListener(this), this);
         pluginManager.registerEvents(new WitherProtectionListener(this), this);
 
@@ -113,30 +122,46 @@ public final class PSAddonPlugin extends JavaPlugin {
         ));
         cfg.addDefault("prevent-stacking", true);
         cfg.addDefault("messages.stack-block-denied", "&cНельзя ставить приват вплотную к другому приватному блоку!");
-        cfg.addDefault("custom-tnt.enabled", true);
-        cfg.addDefault("custom-tnt.type-key", "customtntflow:tnt_type");
-        cfg.addDefault("custom-tnt.traits-key", "customtntflow:traits");
-        cfg.addDefault("custom-tnt.types.region_breaker.type", "region_breaker");
-        cfg.addDefault("custom-tnt.types.region_breaker.traits.radius", 6);
-        cfg.addDefault("custom-tnt.types.region_breaker.damage-override", 1);
-        cfg.addDefault("custom-tnt.types.region_breaker.only-region-blocks", true);
-        cfg.addDefault("custom-tnt.types.region_breaker.cancel-when-empty", true);
         cfg.options().copyDefaults(true);
         saveConfig();
         this.addonSettings = new AddonSettings(cfg);
-        this.customTntResolver = addonSettings.hasCustomTntIntegration()
-                ? new CustomTntResolver(this, addonSettings)
-                : null;
     }
 
-    public CustomTntResolver getCustomTntResolver() {
-        return customTntResolver;
+    public RegionTntManager getRegionTntManager() {
+        return regionTntManager;
     }
 
-    public CustomTntResolver.Match resolveCustomTnt(TNTPrimed primed) {
-        if (customTntResolver == null || primed == null) {
-            return null;
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!command.getName().equalsIgnoreCase("regiontnt")) {
+            return false;
         }
-        return customTntResolver.resolve(primed).orElse(null);
+
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("Команда доступна только игрокам.", NamedTextColor.RED));
+            return true;
+        }
+
+        if (!sender.hasPermission("psaddon.regiontnt")) {
+            sender.sendMessage(Component.text("Недостаточно прав.", NamedTextColor.RED));
+            return true;
+        }
+
+        int amount = 1;
+        if (args.length > 0) {
+            try {
+                amount = Math.max(1, Integer.parseInt(args[0]));
+            } catch (NumberFormatException ex) {
+                sender.sendMessage(Component.text("Неверное количество: " + args[0], NamedTextColor.RED));
+                return true;
+            }
+        }
+
+        ItemStack item = regionTntManager.createItem(amount);
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+        leftover.values().forEach(remaining -> player.getWorld().dropItemNaturally(player.getLocation(), remaining));
+
+        sender.sendMessage(Component.text("Вы получили регионный динамит (" + amount + ")", NamedTextColor.GREEN));
+        return true;
     }
 }
