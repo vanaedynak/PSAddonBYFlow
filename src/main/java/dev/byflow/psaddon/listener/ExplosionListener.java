@@ -33,11 +33,11 @@ public final class ExplosionListener implements Listener {
                 return;
             }
 
-            handleStandardExplosion(event, source);
+            handleStandardExplosion(event);
             return;
         }
 
-        handleStandardExplosion(event, source);
+        handleStandardExplosion(event);
     }
 
     private void handleRegionBomb(EntityExplodeEvent event, RegionBombManager manager) {
@@ -70,26 +70,10 @@ public final class ExplosionListener implements Listener {
         }
     }
 
-    private void handleStandardExplosion(EntityExplodeEvent event, Entity source) {
+    private void handleStandardExplosion(EntityExplodeEvent event) {
         plugin.getProtectionStonesHook().findRegion(event.getLocation()).ifPresent(region -> {
-            AddonSettings.BlockSettings settings = plugin.getAddonSettings().resolve(region.getProtectBlock());
-            if (!isSourceAllowed(settings, source)) {
-                protectBlock(event, region.getProtectBlock());
-                return;
-            }
-
-            int remaining = plugin.damageRegion(region, settings, settings.damagePerExplosion());
-            if (remaining > 0) {
-                protectBlock(event, region.getProtectBlock());
-            }
+            protectBlock(event, region.getProtectBlock());
         });
-    }
-
-    private boolean isSourceAllowed(AddonSettings.BlockSettings settings, Entity source) {
-        if (!settings.tntOnly()) {
-            return true;
-        }
-        return source instanceof TNTPrimed;
     }
 
     private void protectBlock(EntityExplodeEvent event, Block block) {
