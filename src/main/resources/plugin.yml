@@ -5,4 +5,12 @@ author: BYFlow
 api-version: '1.20'
 depend:
   - ProtectionStones
-  - CustomTNTFlow
+commands:
+  regiontnt:
+    description: Gives PSAddon region TNT
+    usage: /<command> [amount]
+    permission: psaddon.regiontnt
+permissions:
+  psaddon.regiontnt:
+    description: Allows receiving PSAddon region TNT
+    default: op
